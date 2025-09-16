@@ -1,0 +1,28 @@
+{
+  "files.associations": {
+    "go.mod": "go.mod",
+    "go.sum": "go.sum",
+    "*.mod": "go.mod"
+  },
+  "go.toolsManagement.checkForUpdates": "local",
+  "go.useLanguageServer": true,
+  "xml.validation.enabled": false,
+  "xml.validation.disallowDocTypeDecl": false,
+  "xml.validation.resolveExternalEntities": false,
+  "xml.validation.noGrammar": "ignore",
+  "xml.fileAssociations": [],
+  "xml.catalogs": [],
+  "[go.mod]": {
+    "editor.insertSpaces": false,
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "files.exclude": {
+    "**/go.mod": false
+  },
+  "search.exclude": {
+    "**/go.mod": false
+  }
+}
