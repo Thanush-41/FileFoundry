@@ -45,7 +45,7 @@ type User struct {
 	// Storage savings tracking for deduplication
 	TotalUploadedBytes int64 `json:"totalUploadedBytes" gorm:"default:0"` // Total bytes uploaded by user
 	ActualStorageBytes int64 `json:"actualStorageBytes" gorm:"default:0"` // Actual storage used (after deduplication)
-	SavedBytes         int64 `json:"savedBytes" gorm:"default:0"`          // Bytes saved through deduplication
+	SavedBytes         int64 `json:"savedBytes" gorm:"default:0"`         // Bytes saved through deduplication
 
 	IsActive      bool       `json:"isActive" gorm:"default:true"`
 	EmailVerified bool       `json:"emailVerified" gorm:"default:false"`
