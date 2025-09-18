@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,7 +16,19 @@ import (
 
 	"file-vault-system/backend/internal/config"
 	"file-vault-system/backend/internal/models"
+	"file-vault-system/backend/pkg/utils"
 )
+
+// FileUploadInfo holds information about a file being uploaded
+type FileUploadInfo struct {
+	Header   *multipart.FileHeader
+	Content  []byte
+	Size     int64
+	Hash     string
+	MimeType string
+	IsValid  bool
+	Warning  string
+}
 
 type FileHandler struct {
 	db  *gorm.DB
@@ -30,7 +42,51 @@ func NewFileHandler(db *gorm.DB, cfg *config.Config) *FileHandler {
 	}
 }
 
-// UploadFile handles file upload
+// GetUserStats returns storage statistics for the authenticated user
+func (h *FileHandler) GetUserStats(c *gin.Context) {
+	// Get user from context (set by auth middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Get user with storage stats
+	var user models.User
+	if err := h.db.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
+		return
+	}
+
+	// Count user's files
+	var fileCount int64
+	h.db.Model(&models.File{}).Where("owner_id = ? AND is_deleted = false", userID).Count(&fileCount)
+
+	// Calculate storage efficiency
+	storageEfficiency := float64(0)
+	if user.TotalUploadedBytes > 0 {
+		storageEfficiency = (float64(user.SavedBytes) / float64(user.TotalUploadedBytes)) * 100
+	}
+
+	// Calculate remaining storage
+	remainingStorage := user.StorageQuota - user.StorageUsed
+	if remainingStorage < 0 {
+		remainingStorage = 0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_uploaded_bytes": user.TotalUploadedBytes,
+		"actual_storage_bytes": user.ActualStorageBytes,
+		"saved_bytes":          user.SavedBytes,
+		"storage_used":         user.StorageUsed,
+		"storage_quota":        user.StorageQuota,
+		"remaining_storage":    remainingStorage,
+		"file_count":           fileCount,
+		"storage_efficiency":   storageEfficiency,
+	})
+}
+
+// UploadFile handles single and multiple file uploads with deduplication and MIME validation
 func (h *FileHandler) UploadFile(c *gin.Context) {
 	// Get user from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
@@ -39,104 +95,239 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	// Parse multipart form
-	file, header, err := c.Request.FormFile("file")
+	// Initialize MIME type validator
+	validator := utils.NewMimeTypeValidator()
+
+	// Parse multipart form with max memory (32MB)
+	err := c.Request.ParseMultipartForm(32 << 20)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get file from request"})
-		return
-	}
-	defer file.Close()
-
-	// Validate file size
-	if header.Size > h.cfg.MaxFileSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "File size exceeds limit"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse multipart form"})
 		return
 	}
 
-	// Check user storage quota
+	// Check if files were uploaded
+	form := c.Request.MultipartForm
+	if form == nil || form.File == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No files uploaded"})
+		return
+	}
+
+	// Get files from both 'file' (single) and 'files' (multiple) fields
+	var allFiles []*multipart.FileHeader
+
+	// Single file upload (field name: "file")
+	if files, exists := form.File["file"]; exists {
+		allFiles = append(allFiles, files...)
+	}
+
+	// Multiple file upload (field name: "files")
+	if files, exists := form.File["files"]; exists {
+		allFiles = append(allFiles, files...)
+	}
+
+	if len(allFiles) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No files found in upload"})
+		return
+	}
+
+	// Check user storage quota and limits
 	var user models.User
 	if err := h.db.First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
 		return
 	}
 
-	if user.StorageUsed+header.Size > user.StorageQuota {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Storage quota exceeded"})
+	// Validate each file and calculate total size
+	var uploadFiles []FileUploadInfo
+	var totalSize int64
+
+	for _, fileHeader := range allFiles {
+		// Open file
+		file, err := fileHeader.Open()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("Failed to open file %s", fileHeader.Filename),
+			})
+			return
+		}
+
+		// Read file content
+		content, err := io.ReadAll(file)
+		file.Close()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": fmt.Sprintf("Failed to read file %s", fileHeader.Filename),
+			})
+			return
+		}
+
+		fileSize := int64(len(content))
+
+		// Validate file size
+		if fileSize > h.cfg.MaxFileSize {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":     fmt.Sprintf("File %s exceeds size limit", fileHeader.Filename),
+				"max_size":  h.cfg.MaxFileSize,
+				"file_size": fileSize,
+			})
+			return
+		}
+
+		// Validate MIME type
+		declaredMimeType := fileHeader.Header.Get("Content-Type")
+		if declaredMimeType == "" {
+			declaredMimeType = "application/octet-stream"
+		}
+
+		isValid, actualMimeType, warning := validator.ValidateMimeType(content, declaredMimeType, fileHeader.Filename)
+
+		if !isValid {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":             fmt.Sprintf("Invalid file type for %s", fileHeader.Filename),
+				"filename":          fileHeader.Filename,
+				"declared_mimetype": declaredMimeType,
+				"actual_mimetype":   actualMimeType,
+				"warning":           warning,
+			})
+			return
+		}
+
+		// Check if MIME type is allowed (if configured)
+		if len(h.cfg.AllowedMimeTypes) > 0 && !validator.IsAllowedMimeType(actualMimeType, h.cfg.AllowedMimeTypes) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":         fmt.Sprintf("File type not allowed for %s", fileHeader.Filename),
+				"filename":      fileHeader.Filename,
+				"mimetype":      actualMimeType,
+				"allowed_types": h.cfg.AllowedMimeTypes,
+			})
+			return
+		}
+
+		uploadFiles = append(uploadFiles, FileUploadInfo{
+			Header:   fileHeader,
+			Content:  content,
+			Size:     fileSize,
+			Hash:     h.calculateContentHash(content),
+			MimeType: actualMimeType,
+			IsValid:  isValid,
+			Warning:  warning,
+		})
+
+		totalSize += fileSize
+	}
+
+	// Check total storage quota
+	if user.StorageUsed+totalSize > user.StorageQuota {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":         "Total upload size exceeds storage quota",
+			"total_size":    totalSize,
+			"storage_used":  user.StorageUsed,
+			"storage_quota": user.StorageQuota,
+			"available":     user.StorageQuota - user.StorageUsed,
+		})
 		return
 	}
 
-	// Calculate file hash
-	file.Seek(0, 0) // Reset file pointer
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to calculate file hash"})
+	// Process each file upload
+	var results []map[string]interface{}
+	var totalSavedBytes int64
+	var totalActualStorage int64
+	var totalUploadedBytes int64
+
+	// Start transaction for atomic operation
+	tx := h.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	for _, uploadFile := range uploadFiles {
+		result, savedBytes, actualStorageUsed, err := h.processFileUpload(tx, uploadFile, userID.(uuid.UUID))
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":    "Failed to process file upload",
+				"filename": uploadFile.Header.Filename,
+				"details":  err.Error(),
+			})
+			return
+		}
+
+		results = append(results, result)
+		totalSavedBytes += savedBytes
+		totalActualStorage += actualStorageUsed
+		totalUploadedBytes += uploadFile.Size
+	}
+
+	// Update user storage statistics
+	if err := h.updateUserStorageStats(tx, userID.(uuid.UUID), totalUploadedBytes, totalActualStorage, totalSavedBytes); err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user storage stats"})
 		return
 	}
-	fileHash := fmt.Sprintf("%x", hash.Sum(nil))
 
-	// Check if file already exists (deduplication)
-	var existingFileHash models.FileHash
-	err = h.db.Where("hash = ?", fileHash).First(&existingFileHash).Error
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit upload transaction"})
+		return
+	}
 
-	var fileHashID uuid.UUID
-	var storagePath string
+	// Return results
+	response := gin.H{
+		"message":              "Files uploaded successfully",
+		"uploaded_files_count": len(results),
+		"total_size":           totalUploadedBytes,
+		"total_saved_bytes":    totalSavedBytes,
+		"files":                results,
+	}
+
+	// Add warnings if any
+	warnings := []string{}
+	for _, uploadFile := range uploadFiles {
+		if uploadFile.Warning != "" {
+			warnings = append(warnings, fmt.Sprintf("%s: %s", uploadFile.Header.Filename, uploadFile.Warning))
+		}
+	}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// processFileUpload handles the upload of a single file within a transaction
+func (h *FileHandler) processFileUpload(tx *gorm.DB, uploadFile FileUploadInfo, userID uuid.UUID) (map[string]interface{}, int64, int64, error) {
+	// Check if file hash already exists (deduplication)
+	var existingHash models.FileHash
+	isNewContent := false
+	err := tx.Where("hash = ?", uploadFile.Hash).First(&existingHash).Error
 
 	if err == gorm.ErrRecordNotFound {
-		// File doesn't exist, create new file hash record and save file
-		fileHashID = uuid.New()
+		// Content doesn't exist, create new hash record
+		isNewContent = true
 
-		// Create storage directory if it doesn't exist
-		if err := os.MkdirAll(h.cfg.StoragePath, 0755); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create storage directory"})
-			return
-		}
+		// Store file physically only if it's new content
+		storagePath := fmt.Sprintf("storage/%s", uploadFile.Hash)
 
-		// Generate unique filename for storage
-		storagePath = filepath.Join(h.cfg.StoragePath, fileHashID.String())
-
-		// Save file to disk
-		file.Seek(0, 0) // Reset file pointer
-		dst, err := os.Create(storagePath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create file"})
-			return
-		}
-		defer dst.Close()
-
-		if _, err := io.Copy(dst, file); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
-			return
-		}
-
-		// Create file hash record
-		fileHashRecord := models.FileHash{
-			BaseModel: models.BaseModel{
-				ID: fileHashID,
-			},
-			Hash:           fileHash,
-			Size:           header.Size,
+		newHash := models.FileHash{
+			ID:             uuid.New(),
+			Hash:           uploadFile.Hash,
+			Size:           uploadFile.Size,
 			StoragePath:    storagePath,
 			ReferenceCount: 1,
 		}
 
-		if err := h.db.Create(&fileHashRecord).Error; err != nil {
-			// Clean up file if database insert fails
-			os.Remove(storagePath)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file hash"})
-			return
+		if err := tx.Create(&newHash).Error; err != nil {
+			return nil, 0, 0, fmt.Errorf("failed to save file hash: %v", err)
 		}
+		existingHash = newHash
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
+		return nil, 0, 0, fmt.Errorf("database error: %v", err)
 	} else {
-		// File already exists, use existing hash record
-		fileHashID = existingFileHash.ID
-		storagePath = existingFileHash.StoragePath
-
-		// Increment reference count
-		if err := h.db.Model(&existingFileHash).Update("reference_count", gorm.Expr("reference_count + 1")).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update reference count"})
-			return
+		// Content already exists, increment reference count
+		if err := tx.Model(&existingHash).Update("reference_count", gorm.Expr("reference_count + 1")).Error; err != nil {
+			return nil, 0, 0, fmt.Errorf("failed to update reference count: %v", err)
 		}
 	}
 
@@ -145,32 +336,74 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 		BaseModel: models.BaseModel{
 			ID: uuid.New(),
 		},
-		Filename:         generateUniqueFilename(header.Filename),
-		OriginalFilename: header.Filename,
-		MimeType:         header.Header.Get("Content-Type"),
-		Size:             header.Size,
-		FileHashID:       fileHashID,
-		OwnerID:          userID.(uuid.UUID),
+		Filename:         generateUniqueFilename(uploadFile.Header.Filename),
+		OriginalFilename: uploadFile.Header.Filename,
+		MimeType:         uploadFile.MimeType,
+		Size:             uploadFile.Size,
+		FileHashID:       existingHash.ID,
+		OwnerID:          userID,
 	}
 
-	if err := h.db.Create(&fileRecord).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file record"})
-		return
+	if err := tx.Create(&fileRecord).Error; err != nil {
+		// If file record creation fails and this was new content, decrement reference count
+		if isNewContent {
+			tx.Model(&models.FileHash{}).Where("hash = ?", uploadFile.Hash).Update("reference_count", gorm.Expr("reference_count - 1"))
+		}
+		return nil, 0, 0, fmt.Errorf("failed to create file record: %v", err)
 	}
 
-	// Update user storage usage (this will be handled by database trigger)
+	// Calculate savings and storage
+	savedBytes := int64(0)
+	actualStorageUsed := int64(0)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "File uploaded successfully",
-		"file": gin.H{
-			"id":               fileRecord.ID,
-			"filename":         fileRecord.Filename,
-			"originalFilename": fileRecord.OriginalFilename,
-			"size":             fileRecord.Size,
-			"mimeType":         fileRecord.MimeType,
-			"createdAt":        fileRecord.CreatedAt,
-		},
-	})
+	if !isNewContent {
+		savedBytes = uploadFile.Size // User saved the full file size due to deduplication
+	} else {
+		actualStorageUsed = uploadFile.Size // New storage used
+	}
+
+	result := map[string]interface{}{
+		"file_id":       fileRecord.ID,
+		"filename":      fileRecord.Filename,
+		"original_name": fileRecord.OriginalFilename,
+		"size":          fileRecord.Size,
+		"mime_type":     fileRecord.MimeType,
+		"content_hash":  uploadFile.Hash,
+		"is_duplicate":  !isNewContent,
+		"saved_bytes":   savedBytes,
+	}
+
+	if uploadFile.Warning != "" {
+		result["warning"] = uploadFile.Warning
+	}
+
+	return result, savedBytes, actualStorageUsed, nil
+}
+
+// updateUserStorageStats updates user storage statistics within a transaction
+func (h *FileHandler) updateUserStorageStats(tx *gorm.DB, userID uuid.UUID, totalUploadedBytes, totalActualStorage, totalSavedBytes int64) error {
+	var user models.User
+	if err := tx.First(&user, userID).Error; err != nil {
+		return fmt.Errorf("failed to find user: %v", err)
+	}
+
+	// Update user storage statistics
+	user.TotalUploadedBytes += totalUploadedBytes
+	user.ActualStorageBytes += totalActualStorage
+	user.StorageUsed += totalActualStorage
+	user.SavedBytes += totalSavedBytes
+
+	if err := tx.Save(&user).Error; err != nil {
+		return fmt.Errorf("failed to update user storage stats: %v", err)
+	}
+
+	return nil
+}
+
+// calculateContentHash calculates SHA-256 hash of file content
+func (h *FileHandler) calculateContentHash(data []byte) string {
+	hash := sha256.Sum256(data)
+	return fmt.Sprintf("%x", hash[:])
 }
 
 // ListFiles handles listing user files
@@ -217,7 +450,7 @@ func (h *FileHandler) GetFile(c *gin.Context) {
 	})
 }
 
-// DeleteFile handles file deletion
+// DeleteFile handles file deletion with deduplication cleanup
 func (h *FileHandler) DeleteFile(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -237,20 +470,107 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 		return
 	}
 
+	// Start transaction for consistent deduplication cleanup
+	tx := h.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
 	// Mark file as deleted
-	if err := h.db.Model(&file).Updates(map[string]interface{}{
+	if err := tx.Model(&file).Updates(map[string]interface{}{
 		"is_deleted": true,
 		"deleted_at": time.Now(),
 		"updated_at": time.Now(),
 	}).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file"})
 		return
 	}
 
-	// Decrease reference count (this will be handled by database trigger)
+	// Decrease reference count for the file hash
+	var fileHash models.FileHash
+	if err := tx.Where("id = ?", file.FileHashID).First(&fileHash).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find file hash"})
+		return
+	}
+
+	// Decrement reference count
+	newRefCount := fileHash.ReferenceCount - 1
+	if err := tx.Model(&fileHash).Update("reference_count", newRefCount).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update reference count"})
+		return
+	}
+
+	// If no more references, delete the hash record
+	actualStorageFreed := int64(0)
+	if newRefCount <= 0 {
+		if err := tx.Delete(&fileHash).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file hash"})
+			return
+		}
+		actualStorageFreed = file.Size
+	}
+
+	// Update user storage statistics
+	var user models.User
+	if err := tx.First(&user, "id = ?", userID).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
+		return
+	}
+
+	updates := map[string]interface{}{
+		"storage_used":         gorm.Expr("storage_used - ?", file.Size),
+		"actual_storage_bytes": gorm.Expr("actual_storage_bytes - ?", actualStorageFreed),
+	}
+
+	if err := tx.Model(&user).Updates(updates).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user storage stats"})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "File deleted successfully",
+		"message":               "File deleted successfully",
+		"actual_storage_freed":  actualStorageFreed,
+		"logical_storage_freed": file.Size,
+	})
+}
+
+// GetStorageSavings returns storage savings information for a user
+func (h *FileHandler) GetStorageSavings(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var user models.User
+	if err := h.db.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
+		return
+	}
+
+	savingsPercent := float64(0)
+	if user.TotalUploadedBytes > 0 {
+		savingsPercent = (float64(user.SavedBytes) / float64(user.TotalUploadedBytes)) * 100
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_uploaded_bytes": user.TotalUploadedBytes,
+		"actual_storage_bytes": user.ActualStorageBytes,
+		"saved_bytes":          user.SavedBytes,
+		"savings_percent":      savingsPercent,
 	})
 }
 
@@ -260,127 +580,4 @@ func generateUniqueFilename(originalFilename string) string {
 	name := strings.TrimSuffix(originalFilename, ext)
 	timestamp := time.Now().Unix()
 	return fmt.Sprintf("%s_%d%s", name, timestamp, ext)
-}
-
-// UserStats represents user-specific statistics
-type UserStats struct {
-	TotalFiles     int64   `json:"totalFiles"`
-	StorageUsed    int64   `json:"storageUsed"`
-	StorageQuota   int64   `json:"storageQuota"`
-	FoldersCreated int64   `json:"foldersCreated"`
-	FilesShared    int64   `json:"filesShared"`
-	RecentUploads  int64   `json:"recentUploads"`  // Files uploaded in last 7 days
-	StoragePercent float64 `json:"storagePercent"` // Percentage of quota used
-}
-
-// GetUserStats returns statistics for the authenticated user
-func (h *FileHandler) GetUserStats(c *gin.Context) {
-	// Get user from context
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	uid, ok := userID.(uuid.UUID)
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	// Check if user is admin - if so, return global stats
-	role, _ := c.Get("role")
-	if userRole, ok := role.(string); ok && userRole == "admin" {
-		h.GetGlobalStats(c)
-		return
-	}
-
-	var stats UserStats
-
-	// Get user info for storage quota
-	var user models.User
-	if err := h.db.First(&user, uid).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user information"})
-		return
-	}
-
-	// Get total files for this user
-	h.db.Model(&models.File{}).Where("owner_id = ? AND is_deleted = false", uid).Count(&stats.TotalFiles)
-
-	// Get storage used and quota
-	stats.StorageUsed = user.StorageUsed
-	stats.StorageQuota = user.StorageQuota
-
-	// Calculate storage percentage
-	if stats.StorageQuota > 0 {
-		stats.StoragePercent = float64(stats.StorageUsed) / float64(stats.StorageQuota) * 100
-	}
-
-	// Get folders created by user
-	h.db.Model(&models.Folder{}).Where("owner_id = ?", uid).Count(&stats.FoldersCreated)
-
-	// Get shared files count
-	h.db.Model(&models.SharedLink{}).Where("shared_by = ?", uid).Count(&stats.FilesShared)
-
-	// Get recent uploads (last 7 days)
-	h.db.Model(&models.File{}).Where("owner_id = ? AND created_at > ? AND is_deleted = false", uid, time.Now().AddDate(0, 0, -7)).Count(&stats.RecentUploads)
-
-	c.JSON(http.StatusOK, stats)
-}
-
-// GlobalStats represents system-wide statistics (admin only)
-type GlobalStats struct {
-	TotalUsers         int64 `json:"totalUsers"`
-	TotalFiles         int64 `json:"totalFiles"`
-	TotalStorage       int64 `json:"totalStorage"`
-	ActiveUsers        int64 `json:"activeUsers"`
-	FilesUploadedToday int64 `json:"filesUploadedToday"`
-	TotalFolders       int64 `json:"totalFolders"`
-	TotalSharedLinks   int64 `json:"totalSharedLinks"`
-}
-
-// GetGlobalStats returns system-wide statistics (admin only)
-func (h *FileHandler) GetGlobalStats(c *gin.Context) {
-	var stats GlobalStats
-
-	// Get total users - handle potential errors
-	if err := h.db.Model(&models.User{}).Count(&stats.TotalUsers).Error; err != nil {
-		stats.TotalUsers = 0
-	}
-
-	// Get total files - handle potential errors
-	if err := h.db.Model(&models.File{}).Where("is_deleted = false").Count(&stats.TotalFiles).Error; err != nil {
-		stats.TotalFiles = 0
-	}
-
-	// Get total storage used - handle potential errors
-	var totalStorage int64
-	if err := h.db.Model(&models.User{}).Select("COALESCE(SUM(storage_used), 0)").Scan(&totalStorage).Error; err == nil {
-		stats.TotalStorage = totalStorage
-	} else {
-		stats.TotalStorage = 0
-	}
-
-	// Get active users (users who logged in within last 30 days) - handle potential errors
-	if err := h.db.Model(&models.User{}).Where("last_login > ?", time.Now().AddDate(0, 0, -30)).Count(&stats.ActiveUsers).Error; err != nil {
-		stats.ActiveUsers = 0
-	}
-
-	// Get files uploaded today - handle potential errors
-	today := time.Now().Truncate(24 * time.Hour)
-	if err := h.db.Model(&models.File{}).Where("created_at >= ? AND is_deleted = false", today).Count(&stats.FilesUploadedToday).Error; err != nil {
-		stats.FilesUploadedToday = 0
-	}
-
-	// Get total folders - handle potential errors
-	if err := h.db.Model(&models.Folder{}).Count(&stats.TotalFolders).Error; err != nil {
-		stats.TotalFolders = 0
-	}
-
-	// Get total shared links - handle potential errors
-	if err := h.db.Model(&models.SharedLink{}).Count(&stats.TotalSharedLinks).Error; err != nil {
-		stats.TotalSharedLinks = 0
-	}
-
-	c.JSON(http.StatusOK, stats)
 }

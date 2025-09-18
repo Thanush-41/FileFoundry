@@ -31,6 +31,12 @@ func CheckPassword(password, hash string) bool {
 	return err == nil
 }
 
+// CalculateContentHash calculates SHA-256 hash of file content for deduplication
+func CalculateContentHash(data []byte) string {
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
 // GenerateRandomToken generates a cryptographically secure random token
 func GenerateRandomToken(length int) (string, error) {
 	bytes := make([]byte, length)
@@ -87,7 +93,7 @@ func DetectMimeType(filePath string) (string, error) {
 
 	// Detect MIME type from content
 	mimeType := http.DetectContentType(buffer)
-	
+
 	// Fall back to extension-based detection if content detection fails
 	if mimeType == "application/octet-stream" {
 		ext := filepath.Ext(filePath)
@@ -133,20 +139,20 @@ func ValidateMimeType(mimeType string, allowedTypes []string) bool {
 func SanitizeFilename(filename string) string {
 	// Remove path separators and other dangerous characters
 	dangerous := []string{"/", "\\", "..", ":", "*", "?", "\"", "<", ">", "|"}
-	
+
 	sanitized := filename
 	for _, char := range dangerous {
 		sanitized = strings.ReplaceAll(sanitized, char, "_")
 	}
-	
+
 	// Trim whitespace and dots from start/end
 	sanitized = strings.Trim(sanitized, " .")
-	
+
 	// Ensure filename is not empty
 	if sanitized == "" {
 		sanitized = "untitled"
 	}
-	
+
 	return sanitized
 }
 
@@ -154,17 +160,17 @@ func SanitizeFilename(filename string) string {
 func GenerateUniqueFilename(originalName, storageDir string) (string, error) {
 	// Sanitize the original filename
 	sanitized := SanitizeFilename(originalName)
-	
+
 	// Get file extension
 	ext := filepath.Ext(sanitized)
 	nameWithoutExt := strings.TrimSuffix(sanitized, ext)
-	
+
 	// Try the original filename first
 	fullPath := filepath.Join(storageDir, sanitized)
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		return sanitized, nil
 	}
-	
+
 	// Generate unique filename with counter
 	for i := 1; i < 1000; i++ {
 		newName := fmt.Sprintf("%s_%d%s", nameWithoutExt, i, ext)
@@ -173,7 +179,7 @@ func GenerateUniqueFilename(originalName, storageDir string) (string, error) {
 			return newName, nil
 		}
 	}
-	
+
 	// If we can't find a unique name, use timestamp
 	timestamp := fmt.Sprintf("%d", getCurrentTimestamp())
 	return fmt.Sprintf("%s_%s%s", nameWithoutExt, timestamp, ext), nil
@@ -185,13 +191,13 @@ func FormatFileSize(size int64) string {
 	if size < unit {
 		return fmt.Sprintf("%d B", size)
 	}
-	
+
 	div, exp := int64(unit), 0
 	for n := size / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	
+
 	units := []string{"KB", "MB", "GB", "TB", "PB"}
 	return fmt.Sprintf("%.1f %s", float64(size)/float64(div), units[exp])
 }
@@ -199,11 +205,11 @@ func FormatFileSize(size int64) string {
 // ParseFileSize parses human-readable file size to bytes
 func ParseFileSize(sizeStr string) (int64, error) {
 	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
-	
+
 	// Extract number and unit
 	var number string
 	var unit string
-	
+
 	for i, char := range sizeStr {
 		if char >= '0' && char <= '9' || char == '.' {
 			number += string(char)
@@ -212,16 +218,16 @@ func ParseFileSize(sizeStr string) (int64, error) {
 			break
 		}
 	}
-	
+
 	if number == "" {
 		return 0, fmt.Errorf("invalid size format: %s", sizeStr)
 	}
-	
+
 	size, err := strconv.ParseFloat(number, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid number in size: %s", number)
 	}
-	
+
 	// Convert based on unit
 	switch unit {
 	case "", "B":
@@ -282,9 +288,9 @@ func IsPDFFile(mimeType string) bool {
 
 // IsTextFile checks if a file is text-based
 func IsTextFile(mimeType string) bool {
-	return strings.HasPrefix(mimeType, "text/") || 
-		   mimeType == "application/json" ||
-		   mimeType == "application/xml"
+	return strings.HasPrefix(mimeType, "text/") ||
+		mimeType == "application/json" ||
+		mimeType == "application/xml"
 }
 
 // CalculateDeduplicationSavings calculates storage savings from deduplication
@@ -292,9 +298,9 @@ func CalculateDeduplicationSavings(originalSize, actualSize int64) (int64, float
 	if originalSize == 0 {
 		return 0, 0
 	}
-	
+
 	saved := originalSize - actualSize
 	percentage := float64(saved) / float64(originalSize) * 100
-	
+
 	return saved, percentage
 }

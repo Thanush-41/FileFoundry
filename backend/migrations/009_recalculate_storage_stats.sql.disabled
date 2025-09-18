@@ -1,0 +1,31 @@
+-- Recalculate storage statistics for existing users based on actual file data
+-- This fixes the incorrect storage calculations from the previous upload logic
+
+-- Step 1: Reset storage statistics for all users
+UPDATE users SET 
+    total_uploaded_bytes = 0,
+    actual_storage_bytes = 0,
+    saved_bytes = 0,
+    storage_used = 0;
+
+-- Step 2: Recalculate total_uploaded_bytes (sum of all file sizes per user)
+UPDATE users SET total_uploaded_bytes = (
+    SELECT COALESCE(SUM(f.size), 0)
+    FROM files f
+    WHERE f.owner_id = users.id AND f.is_deleted = false
+);
+
+-- Step 3: Recalculate actual_storage_bytes (sum of unique file hash sizes per user)
+-- This gets the actual storage used by summing the sizes of unique hashes owned by each user
+UPDATE users SET actual_storage_bytes = (
+    SELECT COALESCE(SUM(DISTINCT fh.size), 0)
+    FROM files f
+    JOIN file_hashes fh ON f.file_hash_id = fh.id
+    WHERE f.owner_id = users.id AND f.is_deleted = false
+);
+
+-- Step 4: Calculate saved_bytes (difference between uploaded and actual storage)
+UPDATE users SET saved_bytes = total_uploaded_bytes - actual_storage_bytes;
+
+-- Step 5: Update storage_used to match actual_storage_bytes (what's really stored)
+UPDATE users SET storage_used = actual_storage_bytes;

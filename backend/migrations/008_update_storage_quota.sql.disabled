@@ -1,0 +1,4 @@
+-- Update existing users' storage quota to 1GB (1073741824 bytes)
+UPDATE users 
+SET storage_quota = 1073741824 
+WHERE storage_quota = 10485760; -- Only update users with the old 10MB default

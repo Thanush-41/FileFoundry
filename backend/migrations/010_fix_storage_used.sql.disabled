@@ -1,0 +1,2 @@
+-- Fix storage_used to match actual_storage_bytes for all users
+UPDATE users SET storage_used = actual_storage_bytes;

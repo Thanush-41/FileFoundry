@@ -212,6 +212,7 @@ func (h *AuthHandler) generateToken(userID uuid.UUID) (string, error) {
 		UserID:   userID,
 		Username: user.Username,
 		Email:    user.Email,
+		Role:     string(user.Role), // Set the simple role field
 		Roles:    roles,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(h.cfg.JWTExpiration) * time.Hour)),

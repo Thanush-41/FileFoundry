@@ -11,19 +11,19 @@ WORKDIR /app
 COPY go.mod go.sum ./
 
 # Download dependencies
-RUN go mod download
+RUN go mod download && go mod verify
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o main ./cmd/server
 
 # Production stage
 FROM alpine:latest
 
 # Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates curl
+RUN apk --no-cache add ca-certificates
 
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && \
@@ -41,9 +41,6 @@ COPY --from=builder /app/migrations ./migrations
 # Create uploads directory
 RUN mkdir -p uploads && chown -R appuser:appgroup uploads
 
-# Copy environment file template
-COPY .env.example .env
-
 # Change ownership
 RUN chown -R appuser:appgroup /app
 
@@ -53,9 +50,5 @@ USER appuser
 # Expose port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
-
-# Run the application
-CMD ["./main"]
+# Run the application using absolute path
+CMD ["/app/main"]

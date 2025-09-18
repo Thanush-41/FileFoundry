@@ -43,6 +43,7 @@ import {
   AccountCircle,
   Folder,
   Share,
+  Savings,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -54,6 +55,10 @@ interface GlobalStats {
   filesUploadedToday: number;
   totalFolders: number;
   totalSharedLinks: number;
+  totalUploadedBytes: number;
+  actualStorageBytes: number;
+  globalSavedBytes: number;
+  globalSavingsPercent: number;
 }
 
 interface AdminUser {
@@ -72,7 +77,7 @@ interface AdminUser {
 }
 
 export const AdminPanel: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,7 +106,6 @@ export const AdminPanel: React.FC = () => {
 
   // Get auth headers
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -401,6 +405,18 @@ export const AdminPanel: React.FC = () => {
                 </Typography>
                 <Typography variant="body1" sx={{ color: '#666666', fontWeight: 500 }}>
                   Shared Links
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ transition: 'transform 0.2s ease-in-out', '&:hover': { transform: 'translateY(-2px)' } }}>
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <Savings sx={{ fontSize: 48, color: '#ff9800', mb: 2 }} />
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#000000', mb: 1 }}>
+                  {stats.globalSavingsPercent ? `${Math.round(stats.globalSavingsPercent)}%` : '0%'}
+                </Typography>
+                <Typography variant="body1" sx={{ color: '#666666', fontWeight: 500 }}>
+                  Storage Saved
                 </Typography>
               </CardContent>
             </Card>

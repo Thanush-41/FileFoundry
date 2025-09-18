@@ -33,17 +33,23 @@ const (
 // User represents a user in the system
 type User struct {
 	BaseModel
-	Username      string       `json:"username" gorm:"unique;not null;size:100"`
-	Email         string       `json:"email" gorm:"unique;not null;size:255"`
-	PasswordHash  string       `json:"-" gorm:"not null;size:255"`
-	FirstName     string       `json:"first_name" gorm:"size:100"`
-	LastName      string       `json:"last_name" gorm:"size:100"`
-	Role          UserRoleType `json:"role" gorm:"type:varchar(20);default:'user'"`
-	StorageQuota  int64        `json:"storage_quota" gorm:"default:10485760"` // 10MB default
-	StorageUsed   int64        `json:"storage_used" gorm:"default:0"`
-	IsActive      bool         `json:"is_active" gorm:"default:true"`
-	EmailVerified bool         `json:"email_verified" gorm:"default:false"`
-	LastLogin     *time.Time   `json:"last_login,omitempty"`
+	Username     string       `json:"username" gorm:"unique;not null;size:100"`
+	Email        string       `json:"email" gorm:"unique;not null;size:255"`
+	PasswordHash string       `json:"-" gorm:"not null;size:255"`
+	FirstName    string       `json:"first_name" gorm:"size:100"`
+	LastName     string       `json:"last_name" gorm:"size:100"`
+	Role         UserRoleType `json:"role" gorm:"type:varchar(20);default:'user'"`
+	StorageQuota int64        `json:"storage_quota" gorm:"default:1073741824"` // 1GB default
+	StorageUsed  int64        `json:"storage_used" gorm:"default:0"`
+
+	// Storage savings tracking for deduplication
+	TotalUploadedBytes int64 `json:"total_uploaded_bytes" gorm:"default:0"` // Total bytes uploaded by user
+	ActualStorageBytes int64 `json:"actual_storage_bytes" gorm:"default:0"` // Actual storage used (after deduplication)
+	SavedBytes         int64 `json:"saved_bytes" gorm:"default:0"`          // Bytes saved through deduplication
+
+	IsActive      bool       `json:"is_active" gorm:"default:true"`
+	EmailVerified bool       `json:"email_verified" gorm:"default:false"`
+	LastLogin     *time.Time `json:"last_login,omitempty"`
 
 	// Relationships
 	Roles         []Role         `json:"roles" gorm:"many2many:user_roles;"`
@@ -66,16 +72,14 @@ type UserRole struct {
 	Role Role `json:"role" gorm:"foreignKey:RoleID"`
 }
 
-// FileHash stores unique file content for deduplication
+// FileHash stores unique file content for deduplication (original schema)
 type FileHash struct {
-	BaseModel
-	Hash           string `json:"hash" gorm:"unique;not null;size:64"` // SHA-256 hash
-	Size           int64  `json:"size" gorm:"not null"`
-	StoragePath    string `json:"storage_path" gorm:"not null"`
-	ReferenceCount int    `json:"reference_count" gorm:"default:0"`
-
-	// Relationships
-	Files []File `json:"files" gorm:"foreignKey:FileHashID"`
+	ID             uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	Hash           string    `json:"hash" gorm:"unique;not null;size:64;index"` // SHA-256 hash
+	Size           int64     `json:"size" gorm:"not null"`
+	StoragePath    string    `json:"storage_path" gorm:"not null;type:text"`
+	ReferenceCount int       `json:"reference_count" gorm:"default:0"`
+	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
 // Folder represents a folder for organizing files
@@ -101,7 +105,7 @@ type File struct {
 	OriginalFilename string     `json:"original_filename" gorm:"not null;size:255"`
 	MimeType         string     `json:"mime_type" gorm:"not null;size:100"`
 	Size             int64      `json:"size" gorm:"not null"`
-	FileHashID       uuid.UUID  `json:"file_hash_id" gorm:"type:uuid;not null"`
+	FileHashID       uuid.UUID  `json:"file_hash_id" gorm:"type:uuid;not null;index"` // Reference to FileHash
 	OwnerID          uuid.UUID  `json:"owner_id" gorm:"type:uuid;not null"`
 	FolderID         *uuid.UUID `json:"folder_id,omitempty" gorm:"type:uuid"`
 	Tags             []string   `json:"tags" gorm:"type:text[]"`
@@ -110,7 +114,7 @@ type File struct {
 	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
 
 	// Relationships
-	FileHash      FileHash        `json:"file_hash" gorm:"foreignKey:FileHashID"`
+	FileHash      *FileHash       `json:"file_hash,omitempty" gorm:"foreignKey:FileHashID"`
 	Owner         User            `json:"owner" gorm:"foreignKey:OwnerID"`
 	Folder        *Folder         `json:"folder,omitempty" gorm:"foreignKey:FolderID"`
 	SharedLinks   []SharedLink    `json:"shared_links" gorm:"foreignKey:FileID"`

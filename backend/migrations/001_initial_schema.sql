@@ -6,7 +6,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create roles table
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(50) UNIQUE NOT NULL,
     description TEXT,
@@ -15,7 +15,7 @@ CREATE TABLE roles (
 );
 
 -- Create users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username VARCHAR(100) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE users (
 );
 
 -- Create user_roles junction table
-CREATE TABLE user_roles (
+CREATE TABLE IF NOT EXISTS user_roles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -42,7 +42,7 @@ CREATE TABLE user_roles (
 );
 
 -- Create file_hashes table for deduplication
-CREATE TABLE file_hashes (
+CREATE TABLE IF NOT EXISTS file_hashes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     hash VARCHAR(64) UNIQUE NOT NULL, -- SHA-256 hash
     size BIGINT NOT NULL,
@@ -52,7 +52,7 @@ CREATE TABLE file_hashes (
 );
 
 -- Create folders table (optional/bonus feature)
-CREATE TABLE folders (
+CREATE TABLE IF NOT EXISTS folders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     parent_id UUID REFERENCES folders(id) ON DELETE CASCADE,
@@ -64,7 +64,7 @@ CREATE TABLE folders (
 );
 
 -- Create files table
-CREATE TABLE files (
+CREATE TABLE IF NOT EXISTS files (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     filename VARCHAR(255) NOT NULL,
     original_filename VARCHAR(255) NOT NULL,
@@ -82,7 +82,7 @@ CREATE TABLE files (
 );
 
 -- Create shared_links table
-CREATE TABLE shared_links (
+CREATE TABLE IF NOT EXISTS shared_links (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     token VARCHAR(255) UNIQUE NOT NULL,
     file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
@@ -102,7 +102,7 @@ CREATE TABLE shared_links (
 );
 
 -- Create user_file_shares table for direct user sharing
-CREATE TABLE user_file_shares (
+CREATE TABLE IF NOT EXISTS user_file_shares (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     shared_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -114,7 +114,7 @@ CREATE TABLE user_file_shares (
 );
 
 -- Create download_stats table
-CREATE TABLE download_stats (
+CREATE TABLE IF NOT EXISTS download_stats (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     downloaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -126,7 +126,7 @@ CREATE TABLE download_stats (
 );
 
 -- Create audit_logs table (bonus feature)
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     action VARCHAR(50) NOT NULL,
@@ -140,7 +140,7 @@ CREATE TABLE audit_logs (
 );
 
 -- Create api_rate_limits table for rate limiting
-CREATE TABLE api_rate_limits (
+CREATE TABLE IF NOT EXISTS api_rate_limits (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     endpoint VARCHAR(255) NOT NULL,

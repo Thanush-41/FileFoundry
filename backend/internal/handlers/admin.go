@@ -25,13 +25,17 @@ func NewAdminHandler(db *gorm.DB, cfg *config.Config) *AdminHandler {
 }
 
 type SystemStats struct {
-	TotalUsers         int64 `json:"totalUsers"`
-	TotalFiles         int64 `json:"totalFiles"`
-	TotalStorage       int64 `json:"totalStorage"`
-	ActiveUsers        int64 `json:"activeUsers"`
-	FilesUploadedToday int64 `json:"filesUploadedToday"`
-	TotalFolders       int64 `json:"totalFolders"`
-	TotalSharedLinks   int64 `json:"totalSharedLinks"`
+	TotalUsers           int64   `json:"totalUsers"`
+	TotalFiles           int64   `json:"totalFiles"`
+	TotalStorage         int64   `json:"totalStorage"`
+	ActiveUsers          int64   `json:"activeUsers"`
+	FilesUploadedToday   int64   `json:"filesUploadedToday"`
+	TotalFolders         int64   `json:"totalFolders"`
+	TotalSharedLinks     int64   `json:"totalSharedLinks"`
+	TotalUploadedBytes   int64   `json:"totalUploadedBytes"`
+	ActualStorageBytes   int64   `json:"actualStorageBytes"`
+	GlobalSavedBytes     int64   `json:"globalSavedBytes"`
+	GlobalSavingsPercent float64 `json:"globalSavingsPercent"`
 }
 
 // GetStats returns system statistics
@@ -75,6 +79,29 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 	// Get total shared links - handle potential errors
 	if err := h.db.Model(&models.SharedLink{}).Count(&stats.TotalSharedLinks).Error; err != nil {
 		stats.TotalSharedLinks = 0
+	}
+
+	// Get global deduplication statistics
+	var totalUploadedBytes, actualStorageBytes, savedBytes int64
+
+	// Sum all users' uploaded bytes
+	if err := h.db.Model(&models.User{}).Select("COALESCE(SUM(total_uploaded_bytes), 0)").Scan(&totalUploadedBytes).Error; err == nil {
+		stats.TotalUploadedBytes = totalUploadedBytes
+	}
+
+	// Sum all users' actual storage bytes
+	if err := h.db.Model(&models.User{}).Select("COALESCE(SUM(actual_storage_bytes), 0)").Scan(&actualStorageBytes).Error; err == nil {
+		stats.ActualStorageBytes = actualStorageBytes
+	}
+
+	// Sum all users' saved bytes
+	if err := h.db.Model(&models.User{}).Select("COALESCE(SUM(saved_bytes), 0)").Scan(&savedBytes).Error; err == nil {
+		stats.GlobalSavedBytes = savedBytes
+	}
+
+	// Calculate global savings percentage
+	if stats.TotalUploadedBytes > 0 {
+		stats.GlobalSavingsPercent = (float64(stats.GlobalSavedBytes) / float64(stats.TotalUploadedBytes)) * 100
 	}
 
 	c.JSON(http.StatusOK, stats)

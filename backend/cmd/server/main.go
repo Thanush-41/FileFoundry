@@ -75,6 +75,7 @@ func main() {
 		{
 			files.POST("/upload", fileHandler.UploadFile)
 			files.GET("/", fileHandler.ListFiles)
+			files.GET("/stats", fileHandler.GetUserStats)
 			files.GET("/:id", fileHandler.GetFile)
 			files.DELETE("/:id", fileHandler.DeleteFile)
 		}

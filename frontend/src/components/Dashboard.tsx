@@ -34,6 +34,7 @@ import {
   InsertDriveFile,
   GridView,
   ViewList,
+  Savings,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { FileUpload } from './FileUpload';
@@ -46,6 +47,10 @@ export const Dashboard: React.FC = () => {
     totalFiles: 0,
     foldersCreated: 0,
     filesShared: 0,
+    totalUploadedBytes: 0,
+    actualStorageBytes: 0,
+    savedBytes: 0,
+    savingsPercent: 0,
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -120,6 +125,10 @@ export const Dashboard: React.FC = () => {
             totalFiles: data.totalFiles || 0,
             foldersCreated: data.foldersCreated || 0,
             filesShared: data.filesShared || 0,
+            totalUploadedBytes: data.totalUploadedBytes || 0,
+            actualStorageBytes: data.actualStorageBytes || 0,
+            savedBytes: data.savedBytes || 0,
+            savingsPercent: data.savingsPercent || 0,
           });
         } else {
           console.error('❌ Failed to fetch stats:', response.status, response.statusText);
@@ -160,6 +169,10 @@ export const Dashboard: React.FC = () => {
           totalFiles: data.totalFiles || 0,
           foldersCreated: data.foldersCreated || 0,
           filesShared: data.filesShared || 0,
+          totalUploadedBytes: data.totalUploadedBytes || 0,
+          actualStorageBytes: data.actualStorageBytes || 0,
+          savedBytes: data.savedBytes || 0,
+          savingsPercent: data.savingsPercent || 0,
         });
       }
     } catch (error) {
@@ -367,7 +380,8 @@ export const Dashboard: React.FC = () => {
                   gridTemplateColumns: { 
                     xs: '1fr',
                     sm: 'repeat(2, 1fr)',
-                    md: 'repeat(4, 1fr)'
+                    md: 'repeat(3, 1fr)',
+                    lg: 'repeat(5, 1fr)'
                   },
                   gap: 2
                 }}
@@ -448,6 +462,19 @@ export const Dashboard: React.FC = () => {
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#5f6368' }}>
                       Shared
+                    </Typography>
+                  </CardContent>
+                </Card>
+
+                {/* Storage Savings Card */}
+                <Card elevation={0} sx={{ border: '1px solid #e0e0e0' }}>
+                  <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                    <Savings sx={{ fontSize: 32, color: '#ff9800', mb: 1 }} />
+                    <Typography variant="h4" sx={{ color: '#202124', fontWeight: 600, mb: 0.5 }}>
+                      {isLoadingStats ? '...' : `${Math.round(stats.savingsPercent)}%`}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#5f6368' }}>
+                      Storage Saved
                     </Typography>
                   </CardContent>
                 </Card>
