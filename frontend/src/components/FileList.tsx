@@ -29,8 +29,10 @@ import {
   VideoFile,
   AudioFile,
   Description,
+  Visibility,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { FilePreview } from './FilePreview';
 
 interface File {
   id: string;
@@ -57,6 +59,8 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<File | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     const fetchFiles = async () => {
@@ -167,7 +171,7 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
     try {
       console.log('📥 Downloading file:', file.filename);
       
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/files/${file.id}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/files/${file.id}/view`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -192,6 +196,16 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
       console.error('❌ Error downloading file:', error);
       setError('Error downloading file');
     }
+  };
+
+  const handlePreview = (file: File) => {
+    setPreviewFile(file);
+    setPreviewOpen(true);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewOpen(false);
+    setPreviewFile(null);
   };
 
   const handleDeleteClick = (file: File) => {
@@ -329,6 +343,15 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
                 </TableCell>
                 <TableCell align="right">
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <Tooltip title="View">
+                      <IconButton
+                        size="small"
+                        onClick={() => handlePreview(file)}
+                        color="secondary"
+                      >
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Download">
                       <IconButton
                         size="small"
@@ -379,6 +402,15 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* File Preview Dialog */}
+      <FilePreview
+        file={previewFile}
+        open={previewOpen}
+        onClose={handleClosePreview}
+        onDownload={handleDownload}
+        token={token}
+      />
     </Box>
   );
 };

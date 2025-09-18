@@ -42,7 +42,7 @@ import { FileList } from './FileList';
 import { AdminPanel } from './AdminPanel';
 
 export const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const [stats, setStats] = useState({
     totalFiles: 0,
     foldersCreated: 0,
@@ -102,7 +102,6 @@ export const Dashboard: React.FC = () => {
     }
 
     const fetchStats = async () => {
-      const token = localStorage.getItem('token');
       if (!token) {
         console.log('❌ No token available for stats');
         return;
@@ -122,13 +121,13 @@ export const Dashboard: React.FC = () => {
           const data = await response.json();
           console.log('✅ Stats fetched successfully:', data);
           setStats({
-            totalFiles: data.totalFiles || 0,
+            totalFiles: data.file_count || 0,
             foldersCreated: data.foldersCreated || 0,
             filesShared: data.filesShared || 0,
-            totalUploadedBytes: data.totalUploadedBytes || 0,
-            actualStorageBytes: data.actualStorageBytes || 0,
-            savedBytes: data.savedBytes || 0,
-            savingsPercent: data.savingsPercent || 0,
+            totalUploadedBytes: data.total_uploaded_bytes || 0,
+            actualStorageBytes: data.actual_storage_bytes || 0,
+            savedBytes: data.saved_bytes || 0,
+            savingsPercent: data.storage_efficiency || 0,
           });
         } else {
           console.error('❌ Failed to fetch stats:', response.status, response.statusText);
@@ -143,7 +142,7 @@ export const Dashboard: React.FC = () => {
     if (user && !isAdmin) {
       fetchStats();
     }
-  }, [user, isAdmin]); // Added isAdmin to dependencies
+  }, [user, isAdmin, token]); // Added token to dependencies
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -156,7 +155,6 @@ export const Dashboard: React.FC = () => {
   const storagePercentage = user ? (user.storageUsed / user.storageQuota) * 100 : 0;
 
   const refreshStats = async () => {
-    const token = localStorage.getItem('token');
     if (!token) return;
 
     try {
@@ -166,13 +164,13 @@ export const Dashboard: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setStats({
-          totalFiles: data.totalFiles || 0,
+          totalFiles: data.file_count || 0,
           foldersCreated: data.foldersCreated || 0,
           filesShared: data.filesShared || 0,
-          totalUploadedBytes: data.totalUploadedBytes || 0,
-          actualStorageBytes: data.actualStorageBytes || 0,
-          savedBytes: data.savedBytes || 0,
-          savingsPercent: data.savingsPercent || 0,
+          totalUploadedBytes: data.total_uploaded_bytes || 0,
+          actualStorageBytes: data.actual_storage_bytes || 0,
+          savedBytes: data.saved_bytes || 0,
+          savingsPercent: data.storage_efficiency || 0,
         });
       }
     } catch (error) {

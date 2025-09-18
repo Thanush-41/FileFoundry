@@ -77,6 +77,7 @@ func main() {
 			files.GET("/", fileHandler.ListFiles)
 			files.GET("/stats", fileHandler.GetUserStats)
 			files.GET("/:id", fileHandler.GetFile)
+			files.GET("/:id/view", fileHandler.ViewFile)
 			files.DELETE("/:id", fileHandler.DeleteFile)
 		}
 

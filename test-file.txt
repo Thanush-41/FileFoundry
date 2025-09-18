@@ -1,0 +1,11 @@
+This is a test file for preview functionality.
+
+It contains multiple lines of text to test the file preview system.
+
+The file preview should display this content in a text area or similar viewer.
+
+Line 5
+Line 6
+Line 7
+
+End of test file.

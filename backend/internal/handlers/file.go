@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -310,6 +311,18 @@ func (h *FileHandler) processFileUpload(tx *gorm.DB, uploadFile FileUploadInfo, 
 		// Store file physically only if it's new content
 		storagePath := fmt.Sprintf("storage/%s", uploadFile.Hash)
 
+		// Create storage directory if it doesn't exist
+		fullStoragePath := filepath.Join(h.cfg.StoragePath, storagePath)
+		storageDir := filepath.Dir(fullStoragePath)
+		if err := os.MkdirAll(storageDir, 0755); err != nil {
+			return nil, 0, 0, fmt.Errorf("failed to create storage directory: %v", err)
+		}
+
+		// Write file content to disk
+		if err := os.WriteFile(fullStoragePath, uploadFile.Content, 0644); err != nil {
+			return nil, 0, 0, fmt.Errorf("failed to write file to storage: %v", err)
+		}
+
 		newHash := models.FileHash{
 			ID:             uuid.New(),
 			Hash:           uploadFile.Hash,
@@ -448,6 +461,93 @@ func (h *FileHandler) GetFile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"file": file,
 	})
+}
+
+// ViewFile serves file content for preview/viewing
+func (h *FileHandler) ViewFile(c *gin.Context) {
+	fmt.Printf("DEBUG ViewFile: Starting ViewFile function\n")
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		fmt.Printf("DEBUG ViewFile: User not authenticated - user_id not found in context\n")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	fmt.Printf("DEBUG ViewFile: User ID from context: %v\n", userID)
+
+	fileID := c.Param("id")
+	fmt.Printf("DEBUG ViewFile: File ID from URL: %s\n", fileID)
+
+	// Get file with its file hash information
+	var file models.File
+	var fileHash models.FileHash
+
+	if err := h.db.Where("id = ? AND owner_id = ? AND is_deleted = false", fileID, userID).First(&file).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			fmt.Printf("DEBUG ViewFile: File not found in database: %s\n", fileID)
+			c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+			return
+		}
+		fmt.Printf("DEBUG ViewFile: Database error getting file: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get file"})
+		return
+	}
+
+	fmt.Printf("DEBUG ViewFile: Found file: %s, FileHashID: %s\n", file.ID, file.FileHashID)
+
+	// Get the file hash record to find the storage path
+	fmt.Printf("DEBUG ViewFile: Looking up file hash with ID: %s\n", file.FileHashID)
+	if err := h.db.Where("id = ?", file.FileHashID).First(&fileHash).Error; err != nil {
+		fmt.Printf("DEBUG ViewFile: Failed to get file hash: %v\n", err)
+		if err == gorm.ErrRecordNotFound {
+			fmt.Printf("DEBUG ViewFile: File hash record not found for ID: %s\n", file.FileHashID)
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get file storage information",
+			"debug": fmt.Sprintf("FileHashID: %s, Error: %v", file.FileHashID, err),
+		})
+		return
+	}
+
+	fmt.Printf("DEBUG ViewFile: Found file hash: %s, StoragePath: %s\n", fileHash.ID, fileHash.StoragePath)
+
+	// First try the new storage path structure (storage/{hash})
+	filePath := filepath.Join(h.cfg.StoragePath, fileHash.StoragePath)
+
+	// Debug logging
+	fmt.Printf("DEBUG ViewFile: StoragePath=%s, fileHash.StoragePath=%s, filePath=%s\n",
+		h.cfg.StoragePath, fileHash.StoragePath, filePath)
+
+	// Check if file exists at new location
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		fmt.Printf("DEBUG ViewFile: File does not exist at new path: %s\n", filePath)
+
+		// Try legacy storage pattern (direct UUID filename)
+		legacyFilePath := filepath.Join(h.cfg.StoragePath, file.ID.String())
+		fmt.Printf("DEBUG ViewFile: Trying legacy path: %s\n", legacyFilePath)
+
+		if _, err := os.Stat(legacyFilePath); os.IsNotExist(err) {
+			fmt.Printf("DEBUG ViewFile: File does not exist at legacy path either: %s\n", legacyFilePath)
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "File not found on disk",
+				"debug": fmt.Sprintf("StoragePath: %s, FileHashPath: %s, FullPath: %s, LegacyPath: %s", h.cfg.StoragePath, fileHash.StoragePath, filePath, legacyFilePath),
+			})
+			return
+		}
+
+		// Use legacy path
+		filePath = legacyFilePath
+		fmt.Printf("DEBUG ViewFile: Using legacy file path: %s\n", filePath)
+	}
+
+	// Set appropriate headers for inline viewing
+	c.Header("Content-Type", file.MimeType)
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", file.OriginalFilename))
+	c.Header("Cache-Control", "max-age=3600") // Cache for 1 hour
+
+	// Serve the file
+	c.File(filePath)
 }
 
 // DeleteFile handles file deletion with deduplication cleanup
