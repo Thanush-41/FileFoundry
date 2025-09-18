@@ -29,15 +29,15 @@ type Config struct {
 	JWTExpiration int // in hours
 
 	// Rate limiting
-	RateLimit         int // requests per second
-	RateLimitWindow   int // in seconds
-	RateLimitBurst    int
+	RateLimit       int // requests per second
+	RateLimitWindow int // in seconds
+	RateLimitBurst  int
 
 	// Storage configuration
-	StoragePath       string
-	MaxFileSize       int64 // in bytes
-	DefaultUserQuota  int64 // in bytes
-	AllowedMimeTypes  []string
+	StoragePath      string
+	MaxFileSize      int64 // in bytes
+	DefaultUserQuota int64 // in bytes
+	AllowedMimeTypes []string
 
 	// CORS configuration
 	AllowedOrigins []string
@@ -73,13 +73,13 @@ func Load() *Config {
 		JWTExpiration: getEnvAsInt("JWT_EXPIRATION", 24), // 24 hours
 
 		// Rate limiting
-		RateLimit:       getEnvAsInt("RATE_LIMIT", 2),      // 2 requests per second
+		RateLimit:       getEnvAsInt("RATE_LIMIT", 2),        // 2 requests per second
 		RateLimitWindow: getEnvAsInt("RATE_LIMIT_WINDOW", 1), // 1 second window
 		RateLimitBurst:  getEnvAsInt("RATE_LIMIT_BURST", 5),  // burst of 5
 
 		// Storage configuration
 		StoragePath:      getEnv("STORAGE_PATH", "./uploads"),
-		MaxFileSize:      getEnvAsInt64("MAX_FILE_SIZE", 104857600),    // 100MB
+		MaxFileSize:      getEnvAsInt64("MAX_FILE_SIZE", 104857600),     // 100MB
 		DefaultUserQuota: getEnvAsInt64("DEFAULT_USER_QUOTA", 10485760), // 10MB
 		AllowedMimeTypes: getEnvAsSlice("ALLOWED_MIME_TYPES", []string{
 			"image/jpeg", "image/png", "image/gif", "image/webp",
@@ -87,6 +87,14 @@ func Load() *Config {
 			"application/json", "application/xml",
 			"application/zip", "application/x-rar-compressed",
 			"video/mp4", "video/webm", "audio/mpeg", "audio/wav",
+			"application/vnd.ms-excel",
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			"application/vnd.ms-excel.sheet.macroEnabled.12",
+			"application/vnd.ms-excel.template.macroEnabled.12",
+			"application/msword",
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			"application/vnd.ms-powerpoint",
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation",
 		}),
 
 		// CORS configuration

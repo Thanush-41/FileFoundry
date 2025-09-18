@@ -10,9 +10,9 @@ import (
 // Base model with common fields
 type BaseModel struct {
 	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
-	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	CreatedAt time.Time      `json:"createdAt" gorm:"autoCreateTime"`
+	UpdatedAt time.Time      `json:"updatedAt" gorm:"autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `json:"deletedAt,omitempty" gorm:"index"`
 }
 
 // Role represents user roles in the system
@@ -36,20 +36,20 @@ type User struct {
 	Username     string       `json:"username" gorm:"unique;not null;size:100"`
 	Email        string       `json:"email" gorm:"unique;not null;size:255"`
 	PasswordHash string       `json:"-" gorm:"not null;size:255"`
-	FirstName    string       `json:"first_name" gorm:"size:100"`
-	LastName     string       `json:"last_name" gorm:"size:100"`
+	FirstName    string       `json:"firstName" gorm:"size:100"`
+	LastName     string       `json:"lastName" gorm:"size:100"`
 	Role         UserRoleType `json:"role" gorm:"type:varchar(20);default:'user'"`
-	StorageQuota int64        `json:"storage_quota" gorm:"default:1073741824"` // 1GB default
-	StorageUsed  int64        `json:"storage_used" gorm:"default:0"`
+	StorageQuota int64        `json:"storageQuota" gorm:"default:1073741824"` // 1GB default
+	StorageUsed  int64        `json:"storageUsed" gorm:"default:0"`
 
 	// Storage savings tracking for deduplication
-	TotalUploadedBytes int64 `json:"total_uploaded_bytes" gorm:"default:0"` // Total bytes uploaded by user
-	ActualStorageBytes int64 `json:"actual_storage_bytes" gorm:"default:0"` // Actual storage used (after deduplication)
-	SavedBytes         int64 `json:"saved_bytes" gorm:"default:0"`          // Bytes saved through deduplication
+	TotalUploadedBytes int64 `json:"totalUploadedBytes" gorm:"default:0"` // Total bytes uploaded by user
+	ActualStorageBytes int64 `json:"actualStorageBytes" gorm:"default:0"` // Actual storage used (after deduplication)
+	SavedBytes         int64 `json:"savedBytes" gorm:"default:0"`          // Bytes saved through deduplication
 
-	IsActive      bool       `json:"is_active" gorm:"default:true"`
-	EmailVerified bool       `json:"email_verified" gorm:"default:false"`
-	LastLogin     *time.Time `json:"last_login,omitempty"`
+	IsActive      bool       `json:"isActive" gorm:"default:true"`
+	EmailVerified bool       `json:"emailVerified" gorm:"default:false"`
+	LastLogin     *time.Time `json:"lastLogin,omitempty"`
 
 	// Relationships
 	Roles         []Role         `json:"roles" gorm:"many2many:user_roles;"`

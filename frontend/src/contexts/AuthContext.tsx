@@ -26,6 +26,7 @@ interface AuthContextType extends AuthState {
   logout: () => void;
   clearError: () => void;
   updateUser: (user: User) => void;
+  refreshUser: () => Promise<void>;
 }
 
 // Initial state
@@ -194,6 +195,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     dispatch({ type: 'UPDATE_USER', payload: user });
   };
 
+  // Refresh user data function
+  const refreshUser = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.log('🔓 No token found, cannot refresh user data');
+      return;
+    }
+
+    try {
+      console.log('🔄 Refreshing user data...');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('✅ User data refreshed:', userData);
+        
+        dispatch({
+          type: 'UPDATE_USER',
+          payload: userData,
+        });
+      } else {
+        console.error('❌ Failed to refresh user data:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing user data:', error);
+    }
+  };
+
   // Check if user is authenticated on mount
   useEffect(() => {
     const validateToken = async () => {
@@ -239,6 +272,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     clearError,
     updateUser,
+    refreshUser,
   };
 
   return (

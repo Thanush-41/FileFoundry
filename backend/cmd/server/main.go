@@ -106,6 +106,6 @@ func main() {
 		}
 	}
 
-	log.Printf("Server starting on port %d", cfg.Port)
+	log.Printf("Server starting on port %s", cfg.Port)
 	log.Fatal(router.Run(":8080"))
 }

@@ -51,7 +51,7 @@ export const Dashboard: React.FC = () => {
     REACT_APP_API_URL: process.env.REACT_APP_API_URL,
     nodeEnv: process.env.NODE_ENV
   });
-  const { user, logout, token } = useAuth();
+  const { user, logout, token, refreshUser } = useAuth();
   const [stats, setStats] = useState({
     totalFiles: 0,
     foldersCreated: 0,

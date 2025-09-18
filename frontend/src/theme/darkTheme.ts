@@ -42,7 +42,6 @@ const darkThemeOptions: ThemeOptions = {
       default: '#000000',
       paper: '#111111',
     },
-    surface: '#1a1a1a',
     text: {
       primary: '#ffffff',
       secondary: '#cccccc',

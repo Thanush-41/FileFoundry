@@ -51,7 +51,9 @@ func (v *MimeTypeValidator) ValidateMimeType(content []byte, declaredMimeType st
 			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 			"application/vnd.ms-powerpoint",
 			"application/vnd.openxmlformats-officedocument.presentationml.presentation",
-			"text/plain", "text/csv", "text/rtf",
+			"text/plain", "text/csv", "text/rtf", "application/json",
+			"application/vnd.ms-excel.sheet.macroEnabled.12",
+			"application/vnd.ms-excel.template.macroEnabled.12",
 		},
 		"video": {
 			"video/mp4", "video/avi", "video/mov", "video/wmv", "video/flv",
