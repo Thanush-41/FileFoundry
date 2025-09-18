@@ -21,14 +21,17 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+  background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)',
+  backgroundColor: theme.palette.background.default,
 }));
 
 const StyledCard = styled(Card)(({ theme }) => ({
   minWidth: 400,
-  padding: theme.spacing(2),
+  padding: theme.spacing(3),
   borderRadius: theme.spacing(2),
-  boxShadow: theme.shadows[10],
+  boxShadow: '0 8px 32px rgba(255, 255, 255, 0.1)',
+  backgroundColor: theme.palette.background.paper,
+  border: `1px solid ${theme.palette.divider}`,
 }));
 
 interface LoginProps {
@@ -104,8 +107,8 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
         <StyledCard>
           <CardContent>
             <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <Typography variant="h4" component="h1" gutterBottom>
-                File Vault
+              <Typography variant="h4" component="h1" gutterBottom sx={{ color: 'text.primary', fontWeight: 600 }}>
+                FileVault
               </Typography>
               <Typography variant="h6" color="text.secondary">
                 Sign in to your account

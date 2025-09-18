@@ -1,5 +1,58 @@
+/* Modern Dark Theme Global Styles */
+html, body {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  background-color: #000000;
+  min-height: 100vh;
+}
+
+/* Scrollbar styling for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+}
+
+/* Selection styling */
+::selection {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* Focus outline styling */
+*:focus {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* Modern transitions */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
 .App {
   text-align: center;
+  background-color: #000000;
+  min-height: 100vh;
 }
 
 .App-logo {
@@ -14,7 +67,7 @@
 }
 
 .App-header {
-  background-color: #282c34;
+  background-color: #000000;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

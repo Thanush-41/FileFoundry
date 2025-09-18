@@ -317,29 +317,32 @@ export const Dashboard: React.FC = () => {
   return (
     <Box sx={{ 
       minHeight: '100vh', 
-      bgcolor: '#fafafa',
+      bgcolor: 'background.default',
+      color: 'text.primary',
       '& .MuiCard-root': {
-        bgcolor: '#ffffff',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24)',
-        border: '1px solid #e0e0e0',
-        borderRadius: '8px',
+        bgcolor: 'background.paper',
+        boxShadow: '0 4px 12px rgba(255, 255, 255, 0.05)',
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 2,
       }
     }}>
-      {/* Google Drive Style Header */}
+      {/* Modern Dark Header */}
       <AppBar 
         position="sticky" 
         elevation={0}
         sx={{ 
-          bgcolor: '#ffffff', 
-          borderBottom: '1px solid #e0e0e0',
-          color: '#000000'
+          bgcolor: 'background.default', 
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          color: 'text.primary'
         }}
       >
         <Toolbar>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Storage sx={{ fontSize: 28, color: '#4285f4' }} />
-            <Typography variant="h6" sx={{ color: '#5f6368', fontWeight: 400, fontSize: '22px' }}>
-              Drive
+            <Storage sx={{ fontSize: 28, color: 'primary.main' }} />
+            <Typography variant="h6" sx={{ color: 'text.primary', fontWeight: 600, fontSize: '22px' }}>
+              FileVault
             </Typography>
           </Box>
           
@@ -347,7 +350,7 @@ export const Dashboard: React.FC = () => {
           
           {/* User Info & Menu */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="body2" sx={{ color: '#5f6368', display: { xs: 'none', sm: 'block' } }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}>
               {user?.email}
             </Typography>
             <IconButton
@@ -358,9 +361,9 @@ export const Dashboard: React.FC = () => {
               <Avatar sx={{ 
                 width: 32, 
                 height: 32, 
-                bgcolor: '#1a73e8', 
+                bgcolor: 'primary.main', 
                 fontSize: 14,
-                color: '#ffffff'
+                color: 'primary.contrastText'
               }}>
                 {user?.username?.charAt(0).toUpperCase()}
               </Avatar>
@@ -372,27 +375,29 @@ export const Dashboard: React.FC = () => {
               PaperProps={{
                 sx: {
                   mt: 1,
-                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '8px',
+                  boxShadow: '0 8px 32px rgba(255, 255, 255, 0.1)',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
                   minWidth: 200,
+                  bgcolor: 'background.paper',
                 }
               }}
             >
-              <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0' }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: '#202124' }}>
+              <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                   {user?.username}
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#5f6368' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   {user?.email}
                 </Typography>
               </Box>
               <MenuItemMUI onClick={handleUserMenuClose} sx={{ py: 1.5 }}>
-                <AccountCircle sx={{ mr: 2, color: '#5f6368' }} />
+                <AccountCircle sx={{ mr: 2, color: 'text.secondary' }} />
                 My Account
               </MenuItemMUI>
               <Divider />
-              <MenuItemMUI onClick={handleLogout} sx={{ py: 1.5, color: '#ea4335' }}>
+              <MenuItemMUI onClick={handleLogout} sx={{ py: 1.5, color: 'text.primary' }}>
                 <Logout sx={{ mr: 2 }} />
                 Sign out
               </MenuItemMUI>
@@ -409,19 +414,21 @@ export const Dashboard: React.FC = () => {
             startIcon={<Add />}
             onClick={() => setUploadDialogOpen(true)}
             sx={{
-              bgcolor: '#1a73e8',
-              color: '#ffffff',
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
               textTransform: 'none',
-              borderRadius: '20px',
+              borderRadius: '12px',
               px: 3,
-              py: 1,
+              py: 1.5,
               fontSize: '14px',
               fontWeight: 500,
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 4px 16px rgba(255, 255, 255, 0.15)',
               '&:hover': {
-                bgcolor: '#1557b0',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-              }
+                bgcolor: 'primary.dark',
+                boxShadow: '0 6px 20px rgba(255, 255, 255, 0.2)',
+                transform: 'translateY(-1px)',
+              },
+              transition: 'all 0.2s ease-in-out',
             }}
           >
             New
@@ -433,24 +440,24 @@ export const Dashboard: React.FC = () => {
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Box sx={{ flex: 1 }}>
-                <Typography variant="body2" sx={{ color: '#5f6368', mb: 1 }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
                   {formatBytes(user?.storageUsed || 0)} of {formatBytes(user?.storageQuota || 0)} used
                 </Typography>
                 <LinearProgress 
                   variant="determinate" 
                   value={storagePercentage}
                   sx={{ 
-                    height: 6, 
-                    borderRadius: 3,
-                    bgcolor: '#f1f3f4',
+                    height: 8, 
+                    borderRadius: 4,
+                    bgcolor: 'rgba(255, 255, 255, 0.1)',
                     '& .MuiLinearProgress-bar': {
-                      bgcolor: storagePercentage > 80 ? '#ea4335' : '#1a73e8',
-                      borderRadius: 3,
+                      bgcolor: storagePercentage > 80 ? '#ffffff' : 'primary.main',
+                      borderRadius: 4,
                     }
                   }}
                 />
               </Box>
-              <Typography variant="body2" sx={{ color: '#5f6368', ml: 2, minWidth: 'fit-content' }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary', ml: 2, minWidth: 'fit-content' }}>
                 {storagePercentage.toFixed(1)}%
               </Typography>
             </Box>
@@ -467,14 +474,14 @@ export const Dashboard: React.FC = () => {
                 textTransform: 'none',
                 fontSize: '14px',
                 fontWeight: 500,
-                color: '#5f6368',
+                color: 'text.secondary',
                 minHeight: '48px',
               },
               '& .Mui-selected': {
-                color: '#1a73e8',
+                color: 'primary.main',
               },
               '& .MuiTabs-indicator': {
-                bgcolor: '#1a73e8',
+                bgcolor: 'primary.main',
                 height: '3px',
               }
             }}
@@ -491,21 +498,9 @@ export const Dashboard: React.FC = () => {
           <Box>
             {/* Quick Access Section */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="body1" sx={{ color: '#202124', fontWeight: 500, mb: 2 }}>
+              <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 500, mb: 2 }}>
                 Quick access
               </Typography>
-              {/* Debug Test Button */}
-              {/* <Button 
-                variant="contained" 
-                onClick={() => {
-                  console.log('🧪 TEST BUTTON CLICKED, setting folder dialog open');
-                  console.log('🧪 Current state before:', folderDialogOpen);
-                  setFolderDialogOpen(true);
-                }}
-                sx={{ mb: 2 }}
-              >
-                TEST FOLDER DIALOG
-              </Button> */}
               <Box 
                 sx={{ 
                   display: 'grid',
@@ -525,23 +520,25 @@ export const Dashboard: React.FC = () => {
                     p: 3,
                     textAlign: 'center',
                     cursor: 'pointer',
-                    border: '2px dashed #e0e0e0',
-                    borderRadius: '12px',
+                    border: '2px dashed',
+                    borderColor: 'divider',
+                    borderRadius: 3,
                     transition: 'all 0.2s ease',
+                    bgcolor: 'background.paper',
                     '&:hover': {
-                      borderColor: '#1a73e8',
-                      bgcolor: '#f8f9ff',
+                      borderColor: 'primary.main',
+                      bgcolor: 'rgba(255, 255, 255, 0.02)',
                       transform: 'translateY(-2px)',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      boxShadow: '0 8px 24px rgba(255, 255, 255, 0.1)',
                     },
                   }}
                   onClick={() => setUploadDialogOpen(true)}
                 >
-                  <CloudUpload sx={{ fontSize: 48, color: '#5f6368', mb: 2 }} />
-                  <Typography variant="h6" sx={{ color: '#202124', fontWeight: 500, mb: 1 }}>
+                  <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="h6" sx={{ color: 'text.primary', fontWeight: 500, mb: 1 }}>
                     Upload Files
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#5f6368' }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     Drag files here or click to browse
                   </Typography>
                 </Paper>
@@ -564,63 +561,64 @@ export const Dashboard: React.FC = () => {
                     p: 3,
                     textAlign: 'center',
                     cursor: 'pointer',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '12px',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 3,
                     transition: 'all 0.2s ease',
-                    backgroundColor: '#fff',
+                    backgroundColor: 'background.paper',
                     '&:hover': {
-                      borderColor: '#1a73e8',
-                      bgcolor: '#f8f9ff',
+                      borderColor: 'primary.main',
+                      bgcolor: 'rgba(255, 255, 255, 0.02)',
                       transform: 'translateY(-2px)',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      boxShadow: '0 8px 24px rgba(255, 255, 255, 0.1)',
                     },
                     '&:active': {
-                      backgroundColor: '#e3f2fd',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
                     },
                   }}
                 >
-                  <FolderOpen sx={{ fontSize: 48, color: '#5f6368', mb: 2 }} />
-                  <Typography variant="h6" sx={{ color: '#202124', fontWeight: 500, mb: 1 }}>
+                  <FolderOpen sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="h6" sx={{ color: 'text.primary', fontWeight: 500, mb: 1 }}>
                     New Folder
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#5f6368' }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     Organize your files
                   </Typography>
                 </Paper>
 
                 {/* Stats Cards */}
-                <Card elevation={0} sx={{ border: '1px solid #e0e0e0' }}>
+                <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
                   <CardContent sx={{ textAlign: 'center', py: 3 }}>
-                    <InsertDriveFile sx={{ fontSize: 32, color: '#1a73e8', mb: 1 }} />
-                    <Typography variant="h4" sx={{ color: '#202124', fontWeight: 600, mb: 0.5 }}>
+                    <InsertDriveFile sx={{ fontSize: 32, color: 'primary.main', mb: 1 }} />
+                    <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 600, mb: 0.5 }}>
                       {isLoadingStats ? '...' : stats.totalFiles}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: '#5f6368' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Files
                     </Typography>
                   </CardContent>
                 </Card>
 
-                <Card elevation={0} sx={{ border: '1px solid #e0e0e0' }}>
+                <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
                   <CardContent sx={{ textAlign: 'center', py: 3 }}>
-                    <Share sx={{ fontSize: 32, color: '#34a853', mb: 1 }} />
-                    <Typography variant="h4" sx={{ color: '#202124', fontWeight: 600, mb: 0.5 }}>
+                    <Share sx={{ fontSize: 32, color: 'primary.main', mb: 1 }} />
+                    <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 600, mb: 0.5 }}>
                       {isLoadingStats ? '...' : stats.filesShared}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: '#5f6368' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Shared
                     </Typography>
                   </CardContent>
                 </Card>
 
                 {/* Storage Savings Card */}
-                <Card elevation={0} sx={{ border: '1px solid #e0e0e0' }}>
+                <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
                   <CardContent sx={{ textAlign: 'center', py: 3 }}>
-                    <Savings sx={{ fontSize: 32, color: '#ff9800', mb: 1 }} />
-                    <Typography variant="h4" sx={{ color: '#202124', fontWeight: 600, mb: 0.5 }}>
+                    <Savings sx={{ fontSize: 32, color: 'primary.main', mb: 1 }} />
+                    <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 600, mb: 0.5 }}>
                       {isLoadingStats ? '...' : `${Math.round(stats.savingsPercent)}%`}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: '#5f6368' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Storage Saved
                     </Typography>
                   </CardContent>
@@ -631,21 +629,21 @@ export const Dashboard: React.FC = () => {
             {/* Recent Files Section */}
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="body1" sx={{ color: '#202124', fontWeight: 500 }}>
+                <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 500 }}>
                   Recent files
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <IconButton
                     size="small"
                     onClick={() => setViewMode('grid')}
-                    sx={{ color: viewMode === 'grid' ? '#1a73e8' : '#5f6368' }}
+                    sx={{ color: viewMode === 'grid' ? 'primary.main' : 'text.secondary' }}
                   >
                     <GridView />
                   </IconButton>
                   <IconButton
                     size="small"
                     onClick={() => setViewMode('list')}
-                    sx={{ color: viewMode === 'list' ? '#1a73e8' : '#5f6368' }}
+                    sx={{ color: viewMode === 'list' ? 'primary.main' : 'text.secondary' }}
                   >
                     <ViewList />
                   </IconButton>
@@ -676,10 +674,13 @@ export const Dashboard: React.FC = () => {
           position: 'fixed',
           bottom: 24,
           right: 24,
-          bgcolor: '#1a73e8',
+          bgcolor: 'primary.main',
+          color: 'primary.contrastText',
           '&:hover': {
-            bgcolor: '#1557b0',
-          }
+            bgcolor: 'primary.dark',
+            transform: 'scale(1.05)',
+          },
+          transition: 'all 0.2s ease-in-out',
         }}
         onClick={() => setUploadDialogOpen(true)}
       >

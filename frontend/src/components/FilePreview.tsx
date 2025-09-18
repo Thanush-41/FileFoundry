@@ -204,9 +204,11 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
                   whiteSpace: 'pre-wrap',
                   overflow: 'auto',
                   height: '100%',
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: 'background.paper',
+                  color: 'text.primary',
                   padding: 2,
-                  border: '1px solid #ddd',
+                  border: '1px solid',
+                  borderColor: 'divider',
                   borderRadius: 1,
                 }}
               >
@@ -219,7 +221,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
                   width: '100%',
                   height: '100%',
                   border: 'none',
-                  backgroundColor: 'white',
+                  backgroundColor: 'inherit',
                 }}
                 onLoad={() => setLoading(false)}
                 onError={() => {
