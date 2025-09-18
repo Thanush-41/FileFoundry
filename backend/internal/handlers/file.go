@@ -96,6 +96,33 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
+	// Get folder ID from form data or query parameter
+	var folderID *uuid.UUID
+	folderIDStr := c.PostForm("folder_id")
+	if folderIDStr == "" {
+		folderIDStr = c.Query("folder_id")
+	}
+
+	if folderIDStr != "" && folderIDStr != "null" && folderIDStr != "root" {
+		parsedFolderID, err := uuid.Parse(folderIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid folder ID format"})
+			return
+		}
+
+		// Verify folder exists and user owns it
+		var folder models.Folder
+		if err := h.db.Where("id = ? AND owner_id = ?", parsedFolderID, userID).First(&folder).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Target folder not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify folder"})
+			return
+		}
+		folderID = &parsedFolderID
+	}
+
 	// Initialize MIME type validator
 	validator := utils.NewMimeTypeValidator()
 
@@ -244,7 +271,7 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	}()
 
 	for _, uploadFile := range uploadFiles {
-		result, savedBytes, actualStorageUsed, err := h.processFileUpload(tx, uploadFile, userID.(uuid.UUID))
+		result, savedBytes, actualStorageUsed, err := h.processFileUpload(tx, uploadFile, userID.(uuid.UUID), folderID)
 		if err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -298,7 +325,7 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 }
 
 // processFileUpload handles the upload of a single file within a transaction
-func (h *FileHandler) processFileUpload(tx *gorm.DB, uploadFile FileUploadInfo, userID uuid.UUID) (map[string]interface{}, int64, int64, error) {
+func (h *FileHandler) processFileUpload(tx *gorm.DB, uploadFile FileUploadInfo, userID uuid.UUID, folderID *uuid.UUID) (map[string]interface{}, int64, int64, error) {
 	// Check if file hash already exists (deduplication)
 	var existingHash models.FileHash
 	isNewContent := false
@@ -355,6 +382,7 @@ func (h *FileHandler) processFileUpload(tx *gorm.DB, uploadFile FileUploadInfo, 
 		Size:             uploadFile.Size,
 		FileHashID:       existingHash.ID,
 		OwnerID:          userID,
+		FolderID:         folderID,
 	}
 
 	if err := tx.Create(&fileRecord).Error; err != nil {
@@ -427,14 +455,37 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 		return
 	}
 
+	// Get folder filter from query parameter
+	folderIDStr := c.Query("folder_id")
+
 	var files []models.File
-	if err := h.db.Where("owner_id = ? AND is_deleted = false", userID).Find(&files).Error; err != nil {
+	query := h.db.Where("owner_id = ? AND is_deleted = false", userID)
+
+	// Apply folder filter
+	if folderIDStr != "" {
+		if folderIDStr == "root" || folderIDStr == "null" {
+			// Show files in root folder (no folder assigned)
+			query = query.Where("folder_id IS NULL")
+		} else {
+			// Show files in specific folder
+			folderUUID, err := uuid.Parse(folderIDStr)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid folder ID format"})
+				return
+			}
+			query = query.Where("folder_id = ?", folderUUID)
+		}
+	}
+
+	// Load files with folder relationship
+	if err := query.Preload("Folder").Order("original_filename ASC").Find(&files).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get files"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"files": files,
+		"count": len(files),
 	})
 }
 
@@ -644,6 +695,69 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 		"message":               "File deleted successfully",
 		"actual_storage_freed":  actualStorageFreed,
 		"logical_storage_freed": file.Size,
+	})
+}
+
+// MoveFile moves a file to a different folder
+func (h *FileHandler) MoveFile(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	fileID := c.Param("id")
+	fileUUID, err := uuid.Parse(fileID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		return
+	}
+
+	var req struct {
+		FolderID *uuid.UUID `json:"folder_id"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input", "details": err.Error()})
+		return
+	}
+
+	// Get the file
+	var file models.File
+	if err := h.db.Where("id = ? AND owner_id = ? AND is_deleted = false", fileUUID, userID).First(&file).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve file"})
+		return
+	}
+
+	// Validate target folder if provided
+	if req.FolderID != nil {
+		var targetFolder models.Folder
+		if err := h.db.Where("id = ? AND owner_id = ?", req.FolderID, userID).First(&targetFolder).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Target folder not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify target folder"})
+			return
+		}
+	}
+
+	// Update file folder
+	if err := h.db.Model(&file).Update("folder_id", req.FolderID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to move file"})
+		return
+	}
+
+	// Reload file with folder information
+	h.db.Preload("Folder").First(&file, fileUUID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "File moved successfully",
+		"file":    file,
 	})
 }
 

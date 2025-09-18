@@ -19,6 +19,12 @@ import {
   Alert,
   CircularProgress,
   Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Breadcrumbs,
+  Link,
 } from '@mui/material';
 import {
   Download,
@@ -30,6 +36,10 @@ import {
   AudioFile,
   Description,
   Visibility,
+  DriveFileMove,
+  Folder as FolderIcon,
+  Home,
+  ChevronRight,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { FilePreview } from './FilePreview';
@@ -43,6 +53,16 @@ interface File {
   created_at: string;
   tags?: string[];
   description?: string;
+}
+
+interface Folder {
+  id: string;
+  name: string;
+  path: string;
+  parent_id?: string;
+  owner_id: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 interface FileListProps {
@@ -61,83 +81,182 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
   const [deleting, setDeleting] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [fileToMove, setFileToMove] = useState<File | null>(null);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
+  const [moving, setMoving] = useState(false);
+  
+  // Navigation state
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [currentFolders, setCurrentFolders] = useState<Folder[]>([]);
+  const [breadcrumbs, setBreadcrumbs] = useState<Folder[]>([]);
 
   useEffect(() => {
-    const fetchFiles = async () => {
-      if (!token) {
-        setError('No authentication token available');
-        setLoading(false);
-        return;
-      }
+    fetchFoldersAndFiles();
+  }, [token, refreshTrigger, currentFolderId]);
 
-      try {
-        console.log('📁 Fetching user files...');
-        setLoading(true);
-        setError(null);
-
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/files/`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Files fetched successfully:', data);
-          setFiles(data.files || []);
-        } else {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          setError(`Failed to fetch files: ${errorData.error || response.statusText}`);
-          console.error('❌ Failed to fetch files:', response.status, errorData);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching files:', error);
-        setError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchFiles();
-  }, [token, refreshTrigger]);
-
-  const refreshFiles = () => {
+  const fetchFoldersAndFiles = async () => {
     if (!token) {
       setError('No authentication token available');
       setLoading(false);
       return;
     }
 
-    const fetchFiles = async () => {
-      try {
-        console.log('📁 Refreshing user files...');
-        setLoading(true);
-        setError(null);
+    try {
+      console.log('📁 Fetching folders and files for folder:', currentFolderId || 'root');
+      setLoading(true);
+      setError(null);
 
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/files/`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+      // Fetch folders for current directory
+      const foldersUrl = currentFolderId 
+        ? `${process.env.REACT_APP_API_URL}/api/v1/folders/?parent_id=${currentFolderId}`
+        : `${process.env.REACT_APP_API_URL}/api/v1/folders/?parent_id=root`;
+      
+      const foldersResponse = await fetch(foldersUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Files refreshed successfully:', data);
-          setFiles(data.files || []);
+      // Fetch files for current directory
+      const filesUrl = currentFolderId 
+        ? `${process.env.REACT_APP_API_URL}/api/v1/files/?folder_id=${currentFolderId}`
+        : `${process.env.REACT_APP_API_URL}/api/v1/files/?folder_id=root`;
+      
+      const filesResponse = await fetch(filesUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (foldersResponse.ok && filesResponse.ok) {
+        const foldersData = await foldersResponse.json();
+        const filesData = await filesResponse.json();
+        
+        console.log('✅ Folders fetched successfully:', foldersData);
+        console.log('✅ Files fetched successfully:', filesData);
+        
+        setCurrentFolders(foldersData.folders || []);
+        setFiles(filesData.files || []);
+        
+        // Update breadcrumbs if we're in a specific folder
+        if (currentFolderId) {
+          updateBreadcrumbs(currentFolderId);
         } else {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          setError(`Failed to fetch files: ${errorData.error || response.statusText}`);
-          console.error('❌ Failed to fetch files:', response.status, errorData);
+          setBreadcrumbs([]);
         }
-      } catch (error) {
-        console.error('❌ Error fetching files:', error);
-        setError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      } finally {
-        setLoading(false);
+      } else {
+        const foldersError = await foldersResponse.json().catch(() => ({ error: 'Unknown folder error' }));
+        const filesError = await filesResponse.json().catch(() => ({ error: 'Unknown file error' }));
+        setError(`Failed to fetch data: ${foldersError.error || filesError.error}`);
+        console.error('❌ Failed to fetch data:', foldersError, filesError);
       }
-    };
+    } catch (error) {
+      console.error('❌ Error fetching folders and files:', error);
+      setError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchFiles();
+  const updateBreadcrumbs = async (folderId: string) => {
+    if (!token) return;
+    
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/folders/${folderId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const folder = data.folder;
+        console.log('📂 Current folder:', folder);
+        
+        // Build breadcrumb trail
+        const crumbs = [];
+        let current = folder;
+        while (current) {
+          crumbs.unshift(current);
+          current = current.parent;
+        }
+        setBreadcrumbs(crumbs);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching folder details:', error);
+    }
+  };
+
+  const refreshFiles = () => {
+    fetchFoldersAndFiles();
+  };
+
+  // Fetch folders for move dialog
+  const fetchFolders = async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/folders/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFolders(data.folders || []);
+      }
+    } catch (error) {
+      console.error('Error fetching folders:', error);
+    }
+  };
+
+  // Handle move file to folder
+  const handleMoveFile = async () => {
+    if (!fileToMove || !token) return;
+
+    try {
+      setMoving(true);
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/files/${fileToMove.id}/move`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          folder_id: selectedFolderId || null,
+        }),
+      });
+
+      if (response.ok) {
+        setMoveDialogOpen(false);
+        refreshFiles(); // Refresh the file list
+        if (onFileDeleted) onFileDeleted(); // Notify parent component
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to move file');
+      }
+    } catch (error) {
+      console.error('Error moving file:', error);
+      setError('Error moving file');
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const openMoveDialog = (file: File) => {
+    setFileToMove(file);
+    setSelectedFolderId('');
+    setMoveDialogOpen(true);
+    fetchFolders();
+  };
+
+  const closeMoveDialog = () => {
+    setMoveDialogOpen(false);
+    setFileToMove(null);
+    setSelectedFolderId('');
   };
 
   const formatBytes = (bytes: number) => {
@@ -165,6 +284,22 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
     if (mimeType.startsWith('audio/')) return <AudioFile color="info" />;
     if (mimeType.startsWith('text/')) return <Description color="action" />;
     return <FilePresent color="action" />;
+  };
+
+  // Navigation functions
+  const handleFolderClick = (folderId: string) => {
+    console.log('📂 Navigating to folder:', folderId);
+    setCurrentFolderId(folderId);
+  };
+
+  const handleNavigateToRoot = () => {
+    console.log('🏠 Navigating to root');
+    setCurrentFolderId(null);
+  };
+
+  const handleBreadcrumbClick = (folderId: string | null) => {
+    console.log('🍞 Breadcrumb navigation to:', folderId || 'root');
+    setCurrentFolderId(folderId);
   };
 
   const handleDownload = async (file: File) => {
@@ -270,15 +405,15 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
     );
   }
 
-  if (files.length === 0) {
+  if (files.length === 0 && currentFolders.length === 0) {
     return (
       <Paper sx={{ p: 4, textAlign: 'center' }}>
         <FilePresent sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
         <Typography variant="h6" color="text.secondary" gutterBottom>
-          No files uploaded yet
+          {currentFolderId ? 'This folder is empty' : 'No files uploaded yet'}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Upload your first file to get started!
+          {currentFolderId ? 'Upload files or create folders to get started!' : 'Upload your first file to get started!'}
         </Typography>
       </Paper>
     );
@@ -286,9 +421,11 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
 
   return (
     <Box>
+      {/* Breadcrumbs for navigation removed as requested */}
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">
-          My Files ({files.length})
+          {currentFolders.length + files.length} item{currentFolders.length + files.length !== 1 ? 's' : ''} ({currentFolders.length} folder{currentFolders.length !== 1 ? 's' : ''}, {files.length} file{files.length !== 1 ? 's' : ''})
         </Typography>
         <Button variant="outlined" size="small" onClick={refreshFiles}>
           Refresh
@@ -307,8 +444,67 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
             </TableRow>
           </TableHead>
           <TableBody>
+            {/* Folders */}
+            {currentFolders.map((folder) => (
+              <TableRow 
+                key={`folder-${folder.id}`} 
+                hover 
+                sx={{ cursor: 'pointer' }}
+                onClick={() => handleFolderClick(folder.id)}
+              >
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FolderIcon color="primary" />
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">
+                        {folder.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Folder
+                      </Typography>
+                    </Box>
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2" color="text.secondary">
+                    —
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Chip 
+                    label="FOLDER" 
+                    size="small" 
+                    variant="outlined"
+                    color="primary"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatDate(folder.created_at)}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <Tooltip title="Open Folder">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFolderClick(folder.id);
+                        }}
+                        color="primary"
+                      >
+                        <FolderIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ))}
+            
+            {/* Files */}
             {files.map((file) => (
-              <TableRow key={file.id} hover>
+              <TableRow key={`file-${file.id}`} hover>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     {getFileIcon(file.mime_type)}
@@ -361,6 +557,15 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
                         <Download fontSize="small" />
                       </IconButton>
                     </Tooltip>
+                    <Tooltip title="Move to Folder">
+                      <IconButton
+                        size="small"
+                        onClick={() => openMoveDialog(file)}
+                        color="secondary"
+                      >
+                        <DriveFileMove fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Delete">
                       <IconButton
                         size="small"
@@ -399,6 +604,48 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
             startIcon={deleting ? <CircularProgress size={16} /> : undefined}
           >
             {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Move File Dialog */}
+      <Dialog open={moveDialogOpen} onClose={closeMoveDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>Move File to Folder</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Move "{fileToMove?.original_filename}" to:
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel>Destination Folder</InputLabel>
+            <Select
+              value={selectedFolderId}
+              onChange={(e) => setSelectedFolderId(e.target.value)}
+              label="Destination Folder"
+              disabled={moving}
+            >
+              <MenuItem value="">
+                <em>Root Directory</em>
+              </MenuItem>
+              {folders.map((folder) => (
+                <MenuItem key={folder.id} value={folder.id}>
+                  {folder.path || folder.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeMoveDialog} disabled={moving}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleMoveFile} 
+            color="primary" 
+            variant="contained"
+            disabled={moving}
+            startIcon={moving ? <CircularProgress size={16} /> : undefined}
+          >
+            {moving ? 'Moving...' : 'Move'}
           </Button>
         </DialogActions>
       </Dialog>

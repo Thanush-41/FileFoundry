@@ -22,6 +22,10 @@ import {
   MenuItem as MenuItemMUI,
   Divider,
   Fab,
+  TextField,
+  Snackbar,
+  Alert as MuiAlert,
+  CircularProgress,
 } from '@mui/material';
 import {
   CloudUpload,
@@ -42,6 +46,11 @@ import { FileList } from './FileList';
 import { AdminPanel } from './AdminPanel';
 
 export const Dashboard: React.FC = () => {
+  console.log('🏗️ Dashboard component rendering/mounting');
+  console.log('🔧 Environment check:', {
+    REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+    nodeEnv: process.env.NODE_ENV
+  });
   const { user, logout, token } = useAuth();
   const [stats, setStats] = useState({
     totalFiles: 0,
@@ -58,6 +67,30 @@ export const Dashboard: React.FC = () => {
   const [fileListRefresh, setFileListRefresh] = useState(0);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Folder creation state
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [folderCreating, setFolderCreating] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+
+  // Add logging for state changes
+  useEffect(() => {
+    console.log('📊 Dialog State Changed:', {
+      folderDialogOpen,
+      timestamp: new Date().toISOString()
+    });
+  }, [folderDialogOpen]);
+
+  useEffect(() => {
+    console.log('📝 Folder Name Changed:', newFolderName);
+  }, [newFolderName]);
+
+  useEffect(() => {
+    console.log('🔧 Folder Creating State:', folderCreating);
+  }, [folderCreating]);
 
   // Handle user menu
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -71,6 +104,95 @@ export const Dashboard: React.FC = () => {
   const handleLogout = () => {
     logout();
     handleUserMenuClose();
+  };
+
+  // Folder creation functions
+  const handleCreateFolder = async () => {
+    console.log('🚀 handleCreateFolder called', {
+      newFolderName: newFolderName,
+      trimmed: newFolderName.trim(),
+      token: token ? 'Token exists' : 'No token'
+    });
+
+    if (!newFolderName.trim()) {
+      console.log('❌ Empty folder name, showing error');
+      setSnackbarMessage('Please enter a folder name');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    try {
+      console.log('🔄 Starting folder creation API call...');
+      setFolderCreating(true);
+      
+      const requestBody = {
+        name: newFolderName.trim(),
+        parent_id: null, // Create at root level
+      };
+      
+      console.log('📤 API Request:', {
+        url: `${process.env.REACT_APP_API_URL}/api/v1/folders/`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: requestBody
+      });
+
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/folders/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('📥 API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('✅ Folder created successfully:', responseData);
+        setSnackbarMessage('Folder created successfully!');
+        setSnackbarSeverity('success');
+        setSnackbarOpen(true);
+        setFolderDialogOpen(false);
+        setNewFolderName('');
+        setFileListRefresh(prev => prev + 1); // Refresh file list
+      } else {
+        const errorData = await response.json();
+        console.error('❌ API Error:', errorData);
+        setSnackbarMessage(errorData.error || 'Failed to create folder');
+        setSnackbarSeverity('error');
+        setSnackbarOpen(true);
+      }
+    } catch (error) {
+      console.error('💥 Network/JavaScript Error:', error);
+      setSnackbarMessage('Error creating folder');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    } finally {
+      console.log('🏁 Folder creation process finished');
+      setFolderCreating(false);
+    }
+  };
+
+  const handleCloseFolderDialog = () => {
+    console.log('❌ Closing folder dialog');
+    setFolderDialogOpen(false);
+    setNewFolderName('');
+  };
+
+  const handleSnackbarClose = () => {
+    console.log('📪 Closing snackbar');
+    setSnackbarOpen(false);
   };
 
   // Check if user is admin
@@ -372,6 +494,18 @@ export const Dashboard: React.FC = () => {
               <Typography variant="body1" sx={{ color: '#202124', fontWeight: 500, mb: 2 }}>
                 Quick access
               </Typography>
+              {/* Debug Test Button */}
+              {/* <Button 
+                variant="contained" 
+                onClick={() => {
+                  console.log('🧪 TEST BUTTON CLICKED, setting folder dialog open');
+                  console.log('🧪 Current state before:', folderDialogOpen);
+                  setFolderDialogOpen(true);
+                }}
+                sx={{ mb: 2 }}
+              >
+                TEST FOLDER DIALOG
+              </Button> */}
               <Box 
                 sx={{ 
                   display: 'grid',
@@ -414,7 +548,18 @@ export const Dashboard: React.FC = () => {
 
                 {/* Create Folder Card */}
                 <Paper
+                  component="div"
                   elevation={0}
+                  onClick={(e) => {
+                    console.log('🔥 NEW FOLDER CARD CLICKED!', {
+                      event: e,
+                      timestamp: new Date().toISOString(),
+                      currentFolderDialogState: folderDialogOpen
+                    });
+                    console.log('🔥 Setting folderDialogOpen to true...');
+                    setFolderDialogOpen(true);
+                    console.log('🔥 setFolderDialogOpen called');
+                  }}
                   sx={{
                     p: 3,
                     textAlign: 'center',
@@ -422,11 +567,15 @@ export const Dashboard: React.FC = () => {
                     border: '1px solid #e0e0e0',
                     borderRadius: '12px',
                     transition: 'all 0.2s ease',
+                    backgroundColor: '#fff',
                     '&:hover': {
                       borderColor: '#1a73e8',
                       bgcolor: '#f8f9ff',
                       transform: 'translateY(-2px)',
                       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                    },
+                    '&:active': {
+                      backgroundColor: '#e3f2fd',
                     },
                   }}
                 >
@@ -561,6 +710,66 @@ export const Dashboard: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Folder Creation Dialog */}
+      {(() => {
+        console.log('🪟 DIALOG RENDERING:', { folderDialogOpen, timestamp: new Date().toISOString() });
+        return null;
+      })()}
+      <Dialog
+        open={folderDialogOpen}
+        onClose={handleCloseFolderDialog}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Create New Folder</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Folder Name"
+            fullWidth
+            variant="outlined"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !folderCreating) {
+                handleCreateFolder();
+              }
+            }}
+            disabled={folderCreating}
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseFolderDialog} disabled={folderCreating}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleCreateFolder} 
+            variant="contained"
+            disabled={folderCreating || !newFolderName.trim()}
+          >
+            {folderCreating ? <CircularProgress size={20} /> : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <MuiAlert 
+          onClose={handleSnackbarClose} 
+          severity={snackbarSeverity} 
+          sx={{ width: '100%' }}
+        >
+          {snackbarMessage}
+        </MuiAlert>
+      </Snackbar>
     </Box>
   );
 };

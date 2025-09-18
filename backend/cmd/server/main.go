@@ -43,6 +43,7 @@ func main() {
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg)
+	folderHandler := handlers.NewFolderHandler(db, cfg)
 	adminHandler := handlers.NewAdminHandler(db, cfg)
 
 	// Set up Gin router
@@ -78,7 +79,21 @@ func main() {
 			files.GET("/stats", fileHandler.GetUserStats)
 			files.GET("/:id", fileHandler.GetFile)
 			files.GET("/:id/view", fileHandler.ViewFile)
+			files.POST("/:id/move", fileHandler.MoveFile)
 			files.DELETE("/:id", fileHandler.DeleteFile)
+		}
+
+		// Protected folder routes
+		folders := api.Group("/folders")
+		folders.Use(middleware.AuthMiddleware())
+		{
+			folders.POST("/", folderHandler.CreateFolder)
+			folders.GET("/", folderHandler.ListFolders)
+			folders.GET("/tree", folderHandler.GetFolderTree)
+			folders.GET("/:id", folderHandler.GetFolder)
+			folders.PUT("/:id", folderHandler.UpdateFolder)
+			folders.POST("/:id/move", folderHandler.MoveFolder)
+			folders.DELETE("/:id", folderHandler.DeleteFolder)
 		}
 
 		// Admin routes

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -7,9 +7,19 @@ import {
   Alert,
   Card,
   CardContent,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import { CloudUpload } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+
+interface Folder {
+  id: string;
+  name: string;
+  path: string;
+}
 
 interface FileUploadProps {
   onUploadComplete?: () => void;
@@ -22,6 +32,32 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
+
+  // Fetch folders on component mount
+  useEffect(() => {
+    const fetchFolders = async () => {
+      if (!token) return;
+
+      try {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/folders/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setFolders(data.folders || []);
+        }
+      } catch (error) {
+        console.error('Error fetching folders:', error);
+      }
+    };
+
+    fetchFolders();
+  }, [token]);
 
   const handleFileSelect = () => {
     console.log('📁 File selector clicked');
@@ -60,6 +96,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
       
       const formData = new FormData();
       formData.append('file', file);
+      
+      // Add folder_id if a folder is selected
+      if (selectedFolderId) {
+        formData.append('folder_id', selectedFolderId);
+      }
 
       const uploadUrl = `${process.env.REACT_APP_API_URL}/api/v1/files/upload`;
       console.log('📡 Upload URL:', uploadUrl);
@@ -116,6 +157,26 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Select a file to upload to your vault
           </Typography>
+          
+          {/* Folder Selection */}
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Upload to Folder (Optional)</InputLabel>
+            <Select
+              value={selectedFolderId}
+              onChange={(e) => setSelectedFolderId(e.target.value)}
+              label="Upload to Folder (Optional)"
+              disabled={uploading}
+            >
+              <MenuItem value="">
+                <em>Root Directory</em>
+              </MenuItem>
+              {folders.map((folder) => (
+                <MenuItem key={folder.id} value={folder.id}>
+                  {folder.path || folder.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           
           <Button
             variant="contained"
