@@ -55,7 +55,7 @@ type User struct {
 	Roles         []Role         `json:"roles" gorm:"many2many:user_roles;"`
 	Files         []File         `json:"files" gorm:"foreignKey:OwnerID"`
 	Folders       []Folder       `json:"folders" gorm:"foreignKey:OwnerID"`
-	SharedLinks   []SharedLink   `json:"shared_links" gorm:"foreignKey:SharedBy"`
+	ShareLinks    []ShareLink    `json:"share_links" gorm:"foreignKey:CreatedBy"`
 	DownloadStats []DownloadStat `json:"download_stats" gorm:"foreignKey:DownloadedBy"`
 }
 
@@ -91,11 +91,10 @@ type Folder struct {
 	Path     string     `json:"path" gorm:"not null"` // Full path for quick lookups
 
 	// Relationships
-	Parent      *Folder      `json:"parent,omitempty" gorm:"foreignKey:ParentID"`
-	Children    []Folder     `json:"children" gorm:"foreignKey:ParentID"`
-	Owner       User         `json:"owner" gorm:"foreignKey:OwnerID"`
-	Files       []File       `json:"files" gorm:"foreignKey:FolderID"`
-	SharedLinks []SharedLink `json:"shared_links" gorm:"foreignKey:FolderID"`
+	Parent   *Folder  `json:"parent,omitempty" gorm:"foreignKey:ParentID"`
+	Children []Folder `json:"children" gorm:"foreignKey:ParentID"`
+	Owner    User     `json:"owner" gorm:"foreignKey:OwnerID"`
+	Files    []File   `json:"files" gorm:"foreignKey:FolderID"`
 }
 
 // File represents a file in the system
@@ -114,61 +113,36 @@ type File struct {
 	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
 
 	// Relationships
-	FileHash      *FileHash       `json:"file_hash,omitempty" gorm:"foreignKey:FileHashID"`
-	Owner         User            `json:"owner" gorm:"foreignKey:OwnerID"`
-	Folder        *Folder         `json:"folder,omitempty" gorm:"foreignKey:FolderID"`
-	SharedLinks   []SharedLink    `json:"shared_links" gorm:"foreignKey:FileID"`
-	UserShares    []UserFileShare `json:"user_shares" gorm:"foreignKey:FileID"`
-	DownloadStats []DownloadStat  `json:"download_stats" gorm:"foreignKey:FileID"`
-}
-
-// ShareType represents the type of sharing
-type ShareType string
-
-const (
-	ShareTypePublic   ShareType = "public"
-	ShareTypePrivate  ShareType = "private"
-	ShareTypePassword ShareType = "password"
-)
-
-// SharedLink represents a sharing link for files or folders
-type SharedLink struct {
-	BaseModel
-	Token         string     `json:"token" gorm:"unique;not null;size:255"`
-	FileID        *uuid.UUID `json:"file_id,omitempty" gorm:"type:uuid"`
-	FolderID      *uuid.UUID `json:"folder_id,omitempty" gorm:"type:uuid"`
-	SharedBy      uuid.UUID  `json:"shared_by" gorm:"type:uuid;not null"`
-	ShareType     ShareType  `json:"share_type" gorm:"not null;size:20"`
-	PasswordHash  string     `json:"-" gorm:"size:255"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-	MaxDownloads  *int       `json:"max_downloads,omitempty"`
-	DownloadCount int        `json:"download_count" gorm:"default:0"`
-	IsActive      bool       `json:"is_active" gorm:"default:true"`
-
-	// Relationships
-	File          *File          `json:"file,omitempty" gorm:"foreignKey:FileID"`
+	FileHash      *FileHash      `json:"file_hash,omitempty" gorm:"foreignKey:FileHashID"`
+	Owner         User           `json:"owner" gorm:"foreignKey:OwnerID"`
 	Folder        *Folder        `json:"folder,omitempty" gorm:"foreignKey:FolderID"`
-	SharedByUser  User           `json:"shared_by_user" gorm:"foreignKey:SharedBy"`
-	DownloadStats []DownloadStat `json:"download_stats" gorm:"foreignKey:SharedLinkID"`
+	SharedLinks   []ShareLink    `json:"shared_links" gorm:"foreignKey:FileID"`
+	FileShares    []FileShare    `json:"file_shares" gorm:"foreignKey:FileID"`
+	DownloadStats []DownloadStat `json:"download_stats" gorm:"foreignKey:FileID"`
+
+	// Sharing statistics
+	ShareCount int  `json:"share_count" gorm:"default:0"`
+	IsShared   bool `json:"is_shared" gorm:"default:false"`
 }
 
-// Permission represents access permissions
-type Permission string
+// SharePermission represents access permissions for sharing
+type SharePermission string
 
 const (
-	PermissionRead  Permission = "read"
-	PermissionWrite Permission = "write"
-	PermissionAdmin Permission = "admin"
+	PermissionView     SharePermission = "view"
+	PermissionDownload SharePermission = "download"
 )
 
-// UserFileShare represents direct sharing between users
-type UserFileShare struct {
+// FileShare represents internal sharing between users
+type FileShare struct {
 	BaseModel
-	FileID     uuid.UUID  `json:"file_id" gorm:"type:uuid;not null"`
-	SharedBy   uuid.UUID  `json:"shared_by" gorm:"type:uuid;not null"`
-	SharedWith uuid.UUID  `json:"shared_with" gorm:"type:uuid;not null"`
-	Permission Permission `json:"permission" gorm:"default:'read';size:20"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	FileID     uuid.UUID       `json:"file_id" gorm:"type:uuid;not null"`
+	SharedBy   uuid.UUID       `json:"shared_by" gorm:"type:uuid;not null"`
+	SharedWith uuid.UUID       `json:"shared_with" gorm:"type:uuid;not null"`
+	Permission SharePermission `json:"permission" gorm:"default:'view';size:20"`
+	Message    string          `json:"message" gorm:"type:text"`
+	ExpiresAt  *time.Time      `json:"expires_at,omitempty"`
+	IsActive   bool            `json:"is_active" gorm:"default:true"`
 
 	// Relationships
 	File           File `json:"file" gorm:"foreignKey:FileID"`
@@ -176,21 +150,54 @@ type UserFileShare struct {
 	SharedWithUser User `json:"shared_with_user" gorm:"foreignKey:SharedWith"`
 }
 
+// ShareLink represents external shareable links
+type ShareLink struct {
+	BaseModel
+	FileID         uuid.UUID       `json:"file_id" gorm:"type:uuid;not null"`
+	CreatedBy      uuid.UUID       `json:"created_by" gorm:"type:uuid;not null"`
+	ShareToken     string          `json:"share_token" gorm:"unique;not null;size:128"`
+	Permission     SharePermission `json:"permission" gorm:"default:'view';size:20"`
+	PasswordHash   string          `json:"-" gorm:"size:255"`
+	MaxDownloads   *int            `json:"max_downloads,omitempty"`
+	DownloadCount  int             `json:"download_count" gorm:"default:0"`
+	ExpiresAt      *time.Time      `json:"expires_at,omitempty"`
+	IsActive       bool            `json:"is_active" gorm:"default:true"`
+	LastAccessedAt *time.Time      `json:"last_accessed_at,omitempty"`
+
+	// Relationships
+	File          File                 `json:"file" gorm:"foreignKey:FileID"`
+	CreatedByUser User                 `json:"created_by_user" gorm:"foreignKey:CreatedBy"`
+	AccessLogs    []ShareLinkAccessLog `json:"access_logs" gorm:"foreignKey:ShareLinkID"`
+}
+
+// ShareLinkAccessLog tracks access to shared links
+type ShareLinkAccessLog struct {
+	BaseModel
+	ShareLinkID uuid.UUID `json:"share_link_id" gorm:"type:uuid;not null"`
+	IPAddress   string    `json:"ip_address" gorm:"type:inet"`
+	UserAgent   string    `json:"user_agent" gorm:"type:text"`
+	Action      string    `json:"action" gorm:"not null;size:50"` // 'view', 'download'
+	AccessedAt  time.Time `json:"accessed_at" gorm:"autoCreateTime"`
+
+	// Relationships
+	ShareLink ShareLink `json:"share_link" gorm:"foreignKey:ShareLinkID"`
+}
+
 // DownloadStat tracks file download statistics
 type DownloadStat struct {
 	ID           uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
 	FileID       uuid.UUID  `json:"file_id" gorm:"type:uuid;not null"`
 	DownloadedBy *uuid.UUID `json:"downloaded_by,omitempty" gorm:"type:uuid"`
-	SharedLinkID *uuid.UUID `json:"shared_link_id,omitempty" gorm:"type:uuid"`
+	ShareLinkID  *uuid.UUID `json:"share_link_id,omitempty" gorm:"type:uuid"`
 	IPAddress    string     `json:"ip_address" gorm:"type:inet"`
 	UserAgent    string     `json:"user_agent" gorm:"type:text"`
 	DownloadSize int64      `json:"download_size"`
 	DownloadedAt time.Time  `json:"downloaded_at" gorm:"autoCreateTime"`
 
 	// Relationships
-	File       File        `json:"file" gorm:"foreignKey:FileID"`
-	User       *User       `json:"user,omitempty" gorm:"foreignKey:DownloadedBy"`
-	SharedLink *SharedLink `json:"shared_link,omitempty" gorm:"foreignKey:SharedLinkID"`
+	File      File       `json:"file" gorm:"foreignKey:FileID"`
+	User      *User      `json:"user,omitempty" gorm:"foreignKey:DownloadedBy"`
+	ShareLink *ShareLink `json:"share_link,omitempty" gorm:"foreignKey:ShareLinkID"`
 }
 
 // AuditLog tracks system activities for auditing

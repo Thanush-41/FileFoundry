@@ -128,37 +128,63 @@ export const MOVE_FILE_MUTATION = gql`
 `;
 
 // Sharing mutations
-export const CREATE_SHARE_LINK_MUTATION = gql`
-  mutation CreateShareLink($input: CreateShareLinkInput!) {
-    createShareLink(input: $input) {
-      id
-      token
-      shareType
-      expiresAt
-      maxDownloads
-      downloadCount
-      createdAt
-    }
-  }
-`;
-
-export const SHARE_WITH_USER_MUTATION = gql`
-  mutation ShareWithUser($input: ShareWithUserInput!) {
-    shareWithUser(input: $input) {
+export const SHARE_FILE_WITH_USER_MUTATION = gql`
+  mutation ShareFileWithUser($fileId: UUID!, $input: ShareFileInput!) {
+    shareFileWithUser(fileId: $fileId, input: $input) {
       id
       file {
         id
         filename
+        originalFilename
       }
       sharedWith {
         id
         username
         email
       }
+      sharedBy {
+        id
+        username
+        email
+      }
       permission
+      message
       expiresAt
+      isActive
       createdAt
     }
+  }
+`;
+
+export const CREATE_SHARE_LINK_MUTATION = gql`
+  mutation CreateShareLink($fileId: UUID!, $input: CreateShareLinkInput!) {
+    createShareLink(fileId: $fileId, input: $input) {
+      id
+      shareToken
+      file {
+        id
+        filename
+        originalFilename
+      }
+      permission
+      maxDownloads
+      downloadCount
+      expiresAt
+      isActive
+      createdAt
+    }
+  }
+`;
+
+export const REVOKE_FILE_SHARE_MUTATION = gql`
+  mutation RevokeFileShare($shareId: UUID!) {
+    revokeFileShare(shareId: $shareId)
+  }
+`;
+
+export const REVOKE_SHARE_LINK_MUTATION = gql`
+  mutation RevokeShareLink($linkId: UUID!) {
+    revokeShareLink(linkId: $linkId)
   }
 `;
 

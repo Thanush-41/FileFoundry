@@ -7,6 +7,7 @@ import (
 	"file-vault-system/backend/internal/config"
 	"file-vault-system/backend/internal/handlers"
 	"file-vault-system/backend/internal/middleware"
+	"file-vault-system/backend/internal/services"
 	"file-vault-system/backend/pkg/database"
 
 	"github.com/gin-gonic/gin"
@@ -46,6 +47,10 @@ func main() {
 	folderHandler := handlers.NewFolderHandler(db, cfg)
 	adminHandler := handlers.NewAdminHandler(db, cfg)
 
+	// Initialize sharing service and handler
+	sharingService := services.NewSharingService(db)
+	sharingHandler := handlers.NewSharingHandler(sharingService)
+
 	// Set up Gin router
 	router := gin.Default()
 	router.Use(middleware.CORS())
@@ -81,7 +86,18 @@ func main() {
 			files.GET("/:id/view", fileHandler.ViewFile)
 			files.POST("/:id/move", fileHandler.MoveFile)
 			files.DELETE("/:id", fileHandler.DeleteFile)
+
+			// File sharing routes
+			files.POST("/:id/share", sharingHandler.ShareFileWithUser)
+			files.POST("/:id/share-link", sharingHandler.CreateShareLink)
+			files.GET("/:id/shares", sharingHandler.GetFileShares)
 		}
+
+		// Sharing routes under /api/v1
+		api.GET("/shared-files", middleware.AuthMiddleware(), sharingHandler.GetSharedFiles)
+		api.GET("/share-links", middleware.AuthMiddleware(), sharingHandler.GetShareLinks)
+		api.DELETE("/shares/:id", middleware.AuthMiddleware(), sharingHandler.RevokeFileShare)
+		api.DELETE("/share-links/:id", middleware.AuthMiddleware(), sharingHandler.RevokeShareLink)
 
 		// Protected folder routes
 		folders := api.Group("/folders")
@@ -105,6 +121,10 @@ func main() {
 			admin.GET("/users", adminHandler.GetUsers)
 		}
 	}
+
+	// Public sharing routes (no auth required)
+	router.GET("/share/:token", sharingHandler.AccessSharedFile)
+	router.GET("/share/:token/download", sharingHandler.DownloadSharedFile)
 
 	log.Printf("Server starting on port %s", cfg.Port)
 	log.Fatal(router.Run(":8080"))

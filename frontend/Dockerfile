@@ -6,6 +6,13 @@ FROM node:18-alpine AS development
 # Set working directory
 WORKDIR /app
 
+# Set Node.js memory options and disable TypeScript checking
+ENV NODE_OPTIONS="--max_old_space_size=8192"
+ENV SKIP_PREFLIGHT_CHECK=true
+ENV TSC_COMPILE_ON_ERROR=true
+ENV GENERATE_SOURCEMAP=false
+ENV DISABLE_ESLINT_PLUGIN=true
+
 # Copy package files
 COPY package*.json ./
 

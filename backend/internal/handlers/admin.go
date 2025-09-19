@@ -77,7 +77,7 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 	}
 
 	// Get total shared links - handle potential errors
-	if err := h.db.Model(&models.SharedLink{}).Count(&stats.TotalSharedLinks).Error; err != nil {
+	if err := h.db.Model(&models.ShareLink{}).Count(&stats.TotalSharedLinks).Error; err != nil {
 		stats.TotalSharedLinks = 0
 	}
 

@@ -40,9 +40,11 @@ import {
   Folder as FolderIcon,
   Home,
   ChevronRight,
+  Share,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { FilePreview } from './FilePreview';
+import { SharingModal } from './SharingModal.tsx';
 
 interface File {
   id: string;
@@ -86,6 +88,10 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
   const [moving, setMoving] = useState(false);
+  
+  // Sharing state
+  const [sharingModalOpen, setSharingModalOpen] = useState(false);
+  const [fileToShare, setFileToShare] = useState<File | null>(null);
   
   // Navigation state
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -297,10 +303,10 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
     setCurrentFolderId(null);
   };
 
-  const handleBreadcrumbClick = (folderId: string | null) => {
-    console.log('🍞 Breadcrumb navigation to:', folderId || 'root');
-    setCurrentFolderId(folderId);
-  };
+  // const handleBreadcrumbClick = (folderId: string | null) => {
+  //   console.log('🍞 Breadcrumb navigation to:', folderId || 'root');
+  //   setCurrentFolderId(folderId);
+  // };
 
   const handleDownload = async (file: File) => {
     try {
@@ -548,6 +554,18 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
                         <Visibility fontSize="small" />
                       </IconButton>
                     </Tooltip>
+                    <Tooltip title="Share">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setFileToShare(file);
+                          setSharingModalOpen(true);
+                        }}
+                        color="info"
+                      >
+                        <Share fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Download">
                       <IconButton
                         size="small"
@@ -657,6 +675,13 @@ export const FileList: React.FC<FileListProps> = ({ onFileDeleted, refreshTrigge
         onClose={handleClosePreview}
         onDownload={handleDownload}
         token={token}
+      />
+      
+      {/* Sharing Modal */}
+      <SharingModal
+        open={sharingModalOpen}
+        onClose={() => setSharingModalOpen(false)}
+        file={fileToShare}
       />
     </Box>
   );

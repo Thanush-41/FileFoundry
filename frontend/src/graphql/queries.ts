@@ -152,63 +152,99 @@ export const GET_FOLDER_TREE = gql`
 
 // Sharing queries
 export const GET_SHARED_FILES = gql`
-  query GetSharedFiles($limit: Int, $offset: Int) {
-    sharedFiles(limit: $limit, offset: $offset) {
-      files {
+  query GetSharedFiles {
+    sharedFiles {
+      id
+      file {
         id
         filename
+        originalFilename
         mimeType
         size
-        sharedWith {
-          id
-          username
-          email
-        }
-        permission
-        expiresAt
+        canPreview
         createdAt
       }
-      total
-      hasMore
+      sharedBy {
+        id
+        username
+        email
+        firstName
+        lastName
+      }
+      permission
+      message
+      expiresAt
+      createdAt
     }
   }
 `;
 
-export const GET_FILES_SHARED_WITH_ME = gql`
-  query GetFilesSharedWithMe($limit: Int, $offset: Int) {
-    filesSharedWithMe(limit: $limit, offset: $offset) {
-      files {
+export const GET_FILE_SHARES = gql`
+  query GetFileShares($fileId: UUID!) {
+    fileShares(fileId: $fileId) {
+      id
+      file {
         id
         filename
-        mimeType
-        size
-        owner {
-          id
-          username
-          firstName
-          lastName
-        }
-        permission
-        expiresAt
-        sharedAt
+        originalFilename
       }
-      total
-      hasMore
+      sharedWith {
+        id
+        username
+        email
+        firstName
+        lastName
+      }
+      permission
+      message
+      expiresAt
+      isActive
+      createdAt
     }
   }
 `;
 
 export const GET_SHARE_LINKS = gql`
-  query GetShareLinks($fileId: UUID!) {
-    shareLinks(fileId: $fileId) {
+  query GetShareLinks {
+    shareLinks {
       id
-      token
-      shareType
-      expiresAt
+      shareToken
+      file {
+        id
+        filename
+        originalFilename
+        mimeType
+        size
+      }
+      permission
       maxDownloads
       downloadCount
+      expiresAt
       isActive
+      lastAccessedAt
       createdAt
+    }
+  }
+`;
+
+export const GET_SHARED_FILE_BY_TOKEN = gql`
+  query GetSharedFileByToken($token: String!, $password: String) {
+    sharedFileByToken(token: $token, password: $password) {
+      file {
+        id
+        filename
+        originalFilename
+        mimeType
+        size
+        canPreview
+      }
+      permission
+      shareInfo {
+        createdAt
+        expiresAt
+        downloadCount
+        maxDownloads
+      }
     }
   }
 `;

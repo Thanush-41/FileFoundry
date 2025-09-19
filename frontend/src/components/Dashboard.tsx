@@ -44,6 +44,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { FileUpload } from './FileUpload';
 import { FileList } from './FileList';
 import { AdminPanel } from './AdminPanel';
+import { SharedFilesView } from './SharedFilesView';
 
 export const Dashboard: React.FC = () => {
   console.log('🏗️ Dashboard component rendering/mounting');
@@ -489,7 +490,7 @@ export const Dashboard: React.FC = () => {
             <Tab label="My Drive" />
             <Tab label="Recent" />
             <Tab label="Starred" disabled />
-            <Tab label="Shared with me" disabled />
+            <Tab label="Shared with me" />
           </Tabs>
         </Box>
 
@@ -664,6 +665,10 @@ export const Dashboard: React.FC = () => {
             refreshTrigger={fileListRefresh}
             viewMode={viewMode}
           />
+        )}
+
+        {activeTab === 3 && (
+          <SharedFilesView />
         )}
       </Container>
 
